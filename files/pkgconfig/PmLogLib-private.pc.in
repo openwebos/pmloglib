@@ -16,12 +16,10 @@
 #
 # LICENSE@@@
 
-prefix=@CMAKE_INSTALL_PREFIX@
-exec_prefix=${prefix}
-libdir=${exec_prefix}/lib
-includedir=${prefix}/include/@PMLOGLIB_PRIVATE_NAME@
+libdir=@WEBOS_INSTALL_LIBDIR@
+includedir=@WEBOS_INSTALL_INCLUDEDIR@
 
-Name: @PMLOGLIB_PRIVATE_NAME@
-Description: webOS Logging Library - Private Interface
-Version: @PMLOGLIB_LIBRARY_VERSION@
+Name: PmLogLib-private
+Description: @WEBOS_PROJECT_SUMMARY@ - Private Interface
+Version: @WEBOS_COMPONENT_VERSION@
 Cflags: -I${includedir}
