@@ -22,7 +22,7 @@
 
 cmake_minimum_required (VERSION 2.6)
 
-project (PmLogLib)
+project (PmLogLib C)
 
 set (PMLOGLIB_API_VERSION_MAJOR 2)
 set (PMLOGLIB_API_VERSION_MINOR 0)
