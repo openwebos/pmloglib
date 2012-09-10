@@ -1,23 +1,33 @@
 PmLogLib
 ========
 
-This is the repository for PmLogLib, the webOS logging library.
+Summary
+-------
+The Open webOS logging library
+
+
+Dependencies
+==============
+
+Below are the tools (and their minimum versions) required to build _PmLogLib_:
+
+- cmake (version required by openwebos/cmake-modules-webos)
+- gcc 4.6.3
+- make (any version)
+- openwebos/cmake-modules-webos 1.0.0 RC3
+- pkg-config 0.26
+
+Below is the component (and its minimum version) required to run _PmLogLib_:
+
+- openwebos/PmLogConf 2.0.0
 
 How to Build on Linux
 =====================
 
-## Dependencies
-
-Below are the tools (and their minimum versions) required to build PmLogLib:
-
-* cmake 2.6
-* gcc 4.3
-* make (any version)
-* pkg-config 0.22
-
 ## Building
 
-Once you have downloaded the source, execute the following to build it:
+Once you have downloaded the source, enter the following to build it (after
+changing into the directory under which it was downloaded):
 
     $ mkdir BUILD
     $ cd BUILD
@@ -25,51 +35,63 @@ Once you have downloaded the source, execute the following to build it:
     $ make
     $ sudo make install
 
-The header file will be installed under
+The directory under which the files are installed defaults to `/usr/local/webos`.
+You can install them elsewhere by supplying a value for `WEBOS_INSTALL_ROOT`
+when invoking `cmake`. For example:
 
-    /usr/local/include/PmLogLib
-
-and the libraries under
-
-    /usr/local/lib
-
-You can install it elsewhere by supplying a value for _CMAKE\_INSTALL\_PREFIX_ when invoking _cmake_. For example:
-
-    $ cmake -D CMAKE_INSTALL_PREFIX:STRING=$HOME/projects/openwebos ..
+    $ cmake -D WEBOS_INSTALL_ROOT:PATH=$HOME/projects/openwebos ..
     $ make
     $ make install
-    
-will install the header file under
 
-    $HOME/projects/openwebos/include/PmLogLib
-    
-and the libraries under
+will install the files in subdirectories of `$HOME/projects/openwebos`.
 
-    $HOME/projects/openwebos/lib
-    
-directory.
+Specifying `WEBOS_INSTALL_ROOT` also causes `pkg-config` to look in that tree
+first before searching the standard locations. You can specify additional
+directories to be searched prior to this one by setting the `PKG_CONFIG_PATH`
+environment variable.
 
-## Generating documentation
+If not specified, `WEBOS_INSTALL_ROOT` defaults to `/usr/local/webos`.
+
+To configure for a debug build, enter:
+
+    $ cmake -D CMAKE_BUILD_TYPE:STRING=Debug ..
+
+To see a list of the make targets that `cmake` has generated, enter:
+
+    $ make help
+
+## Uninstalling
+
+From the directory where you originally ran `make install`, enter:
+
+    $ [sudo] make uninstall
+
+You will need to use `sudo` if you did not specify `WEBOS_INSTALL_ROOT`.
+
+
+## Generating Documentation
 
 The tools required to generate the documentation are:
 
-* doxygen 1.6.3
-* graphviz 2.20.2
+- doxygen 1.7.6.1
+- graphviz 2.26.3
 
-Once you have run _cmake_, execute the following to generate the documentation:
+Once you have run `cmake`, enter the following to generate the documentation:
 
     $ make docs
 
 To view the generated HTML documentation, point your browser to
+`Documentation/PmLogLib/html/index.html`
 
-    doc/html/index.html
+To install the generated documentation, enter:
 
-## Linking against PmLogLib
+    $ [sudo] make install-docs
 
-If your system has pkgconfig then you can just add this to your makefile:
+The documentation will be installed to `usr/share/doc/PmLogLib/html` under
+the tree defined by the value of `WEBOS_INSTALL_ROOT` (or its default).
 
-    CFLAGS += $(shell pkg-config --cflags PmLogLib)
-    LDFLAGS += $(shell pkg-config --libs PmLogLib)
+You will need to use `sudo` if you did not specify `WEBOS_INSTALL_ROOT`.
+
 
 # Copyright and License Information
 

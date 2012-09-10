@@ -20,102 +20,31 @@
 # PmLogLib/CMakeLists.txt
 #
 
-cmake_minimum_required (VERSION 2.6)
+cmake_minimum_required (VERSION 2.8.7)
 
 project (PmLogLib C)
-
-set (PMLOGLIB_API_VERSION_MAJOR 2)
-set (PMLOGLIB_API_VERSION_MINOR 0)
-set (PMLOGLIB_API_VERSION_PATCH 0)
-set (PMLOGLIB_LIBRARY_VERSION "${PMLOGLIB_API_VERSION_MAJOR}.${PMLOGLIB_API_VERSION_MINOR}.${PMLOGLIB_API_VERSION_PATCH}")
-set (PMLOGLIB_LIBRARY_NAME "${CMAKE_PROJECT_NAME}")
-set (PMLOGLIB_PRIVATE_NAME "${CMAKE_PROJECT_NAME}-private")
-
-# Make sure the build system's version of this component matches what we're building.
-# The intent is for it to pass in PMLOGLIB_COMPONENT_VERSION via the command line.
-if (DEFINED PMLOGLIB_COMPONENT_VERSION)
-	if (NOT (PMLOGLIB_LIBRARY_VERSION STREQUAL PMLOGLIB_COMPONENT_VERSION))
-		message(FATAL_ERROR "Component version from build system (${PMLOGLIB_COMPONENT_VERSION}) != configured version (${PMLOGLIB_LIBRARY_VERSION})")
-	endif ()
-endif ()
-
-if (NOT CMAKE_BUILD_TYPE)
-	set (CMAKE_BUILD_TYPE "Release")
-endif ()
-
-message ("CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
-message ("CMAKE_FIND_ROOT_PATH: ${CMAKE_FIND_ROOT_PATH}")
-message ("CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}")
+include(webOS/webOS)
+webos_modules_init(1 0 0 QUALIFIER RC3)
+webos_component(2 1 0)
 
 # Build the private interface to PmLogLib (PmLogLib-private)
 # To enable this option run "cmake -D BUILD_PRIVATE=ON"
-if (BUILD_PRIVATE)
-	configure_file (${PROJECT_SOURCE_DIR}/config/${PMLOGLIB_PRIVATE_NAME}.pc.in
-			${PROJECT_BINARY_DIR}/config/${PMLOGLIB_PRIVATE_NAME}.pc @ONLY)
-	install (DIRECTORY "include/${PMLOGLIB_PRIVATE_NAME}" DESTINATION "include/" FILES_MATCHING PATTERN "*.h" PATTERN ".*" EXCLUDE)
-	install (FILES "${PROJECT_BINARY_DIR}/config/${PMLOGLIB_PRIVATE_NAME}.pc" DESTINATION "lib/pkgconfig")
-	return ()
-endif ()
+if(BUILD_PRIVATE)
+	webos_build_pkgconfig(files/pkgconfig/PmLogLib-private)
+	install(DIRECTORY "include/private/" DESTINATION @WEBOS_INSTALL_INCLUDEDIR@ FILES_MATCHING PATTERN "*.h" PATTERN ".*" EXCLUDE)
+	return()
+endif()
 
-configure_file (${PROJECT_SOURCE_DIR}/config/${PMLOGLIB_LIBRARY_NAME}.pc.in
-		${PROJECT_BINARY_DIR}/config/${PMLOGLIB_LIBRARY_NAME}.pc @ONLY)
-configure_file (${PROJECT_SOURCE_DIR}/doc/Doxyfile.in
-		${PROJECT_BINARY_DIR}/doc/Doxyfile)
+webos_build_pkgconfig(files/pkgconfig/PmLogLib)
+include_directories(include/public include/private)
 
+webos_add_compiler_flags(ALL -Wall)
+webos_add_linker_options(ALL --version-script=${CMAKE_SOURCE_DIR}/src/PmLogLibExports.map)
+webos_add_linker_options(ALL --no-undefined)
 
-include_directories ("${PROJECT_SOURCE_DIR}/include/${PMLOGLIB_LIBRARY_NAME}")
-include_directories ("${PROJECT_SOURCE_DIR}/include/${PMLOGLIB_PRIVATE_NAME}")
+webos_configure_source_files(SOURCE_FILES src/PmLogLib.c)
+add_library(PmLogLib SHARED ${SOURCE_FILES})
+target_link_libraries(PmLogLib dl pthread)
+webos_build_library()
 
-macro (add_flags flags)
-	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${flags}")
-endmacro ()
-
-macro (add_linker_flags flags)
-	# Appending to CMAKE_EXE_LINKER_FLAGS fails to add them to the link command line -- why?
-	# Note that using add_definitions() also fails to add to the link command line
-	add_flags ("${flags}")
-endmacro ()
-
-
-# We use <stdint.h>
-add_definitions ("-std=c99")
-
-# Turn on all warnings and make them into errors
-add_definitions ("-Wall -Werror")
-
-# Specify which symbols are to be exported
-add_linker_flags ("-Wl,--version-script=${PROJECT_SOURCE_DIR}/src/${PMLOGLIB_LIBRARY_NAME}Exports.map")
-
-# Require that all undefined symbols are satisfied by the libraries from target_link_libraries()
-add_linker_flags ("-Wl,--no-undefined")
-# XXX_ The libraries that come with gcc fail when --no-allow-shlib-undefined is specified
-#add_linker_flags ("-Wl,--no-allow-shlib-undefined")
-
-
-add_library (${PMLOGLIB_LIBRARY_NAME}
-	SHARED
-	src/PmLogLib.c
-)
-
-# NB. pthread supplies the sem_*() routines
-target_link_libraries (${PMLOGLIB_LIBRARY_NAME}
-	dl
-	pthread
-)
-
-set_target_properties (${PMLOGLIB_LIBRARY_NAME} PROPERTIES VERSION ${PMLOGLIB_LIBRARY_VERSION} SOVERSION ${PMLOGLIB_API_VERSION_MAJOR})
-
-install (DIRECTORY "include/${PMLOGLIB_LIBRARY_NAME}" DESTINATION "include/" FILES_MATCHING PATTERN "*.h" PATTERN ".*" EXCLUDE)
-install (TARGETS "${PMLOGLIB_LIBRARY_NAME}" LIBRARY DESTINATION "lib${LIB_SUFFIX}/")
-install (FILES "${PROJECT_BINARY_DIR}/config/${PMLOGLIB_LIBRARY_NAME}.pc" DESTINATION "lib/pkgconfig")
-
-
-# This adds a target called "docs" (i.e., make docs). doxygen and dot
-# (from graphviz) are expected to be available.
-# ${PROJECT_BINARY_DIR} is the build directory and ${PROJECT_SOURCE_DIR}
-# is the source directory.
-add_custom_target (docs 
-			doxygen ${PROJECT_BINARY_DIR}/doc/Doxyfile
-			SOURCES ${PROJECT_SOURCE_DIR}/doc/Doxyfile.in
-			WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/doc)
-
+webos_config_build_doxygen(doc Doxyfile)

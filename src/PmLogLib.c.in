@@ -163,7 +163,7 @@ static void PrintAppendToFile(const char* filePath, const char* fmt, ...)
 #undef DbgPrint
 #define DbgPrint(...) \
 	{															\
-		const char* path = "/var/log/pmlog.log";				\
+		const char* path = "@WEBOS_INSTALL_LOGDIR@/pmlog.log";				\
 		PrintAppendToFile(path, COMPONENT_PREFIX __VA_ARGS__);	\
 	}
 
@@ -722,7 +722,7 @@ static bool PrvInitContext(const char* contextName, const char* levelStr,
 **********************************************************************/
 static bool PrvInitContexts(void)
 {
-	const char* kConfigFile = "/etc/PmLogContexts.conf";
+	const char* kConfigFile = "@WEBOS_INSTALL_SYSCONFDIR@/PmLog/PmLogContexts.conf";
 	const char* kContextsSection = "[Contexts]";
 
 	FILE*	f;
@@ -910,7 +910,7 @@ static bool PrvReadConfigKey(PmLogGlobals* gGlobalsP,
 **********************************************************************/
 static bool PrvReadGlobalConfig(PmLogGlobals* gGlobalsP)
 {
-	const char* kConfigFile = "/etc/PmLogContexts.conf";
+	const char* kConfigFile = "@WEBOS_INSTALL_SYSCONFDIR@/PmLog/PmLogContexts.conf";
 	const char* kConfigSection = "[Config]";
 
 	FILE*	f;
@@ -1050,7 +1050,7 @@ static const char kHexChars[16] =
 **********************************************************************/
 static void __attribute ((constructor)) init_function(void)
 {
-	const char* kPmLogLibSoFilePath = "/usr/lib/libPmLogLib.so";
+	const char* kPmLogLibSoFilePath = "@WEBOS_INSTALL_LIBDIR@/libPmLogLib.so";
 
 	int			err;
 	sem_t*		sem;
