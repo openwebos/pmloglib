@@ -22,7 +22,12 @@
 
 cmake_minimum_required (VERSION 2.8.7)
 
-project (PmLogLib C)
+if(BUILD_PRIVATE)
+	project(PmLogLib NONE)
+else()
+	project(PmLogLib C)
+endif()
+
 include(webOS/webOS)
 webos_modules_init(1 0 0 QUALIFIER RC3)
 webos_component(2 1 0)
