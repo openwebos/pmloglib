@@ -59,6 +59,11 @@ pid_t gettid(void)
  ***********************************************************************/
 #define COMPONENT_PREFIX	"PmLogLib: "
 
+#define LOG_PROCESS_IDS_TAG "LogProcessIds"
+#define LOG_THREAD_IDS_TAG  "LogThreadIds"
+#define LOG_TO_CONSOLE_TAG  "LogToConsole"
+
+#define kConfigFile "@WEBOS_INSTALL_SYSCONFDIR@/PmLog/PmLogContexts.conf"
 
 // don't check in with this on!
 //#define DEBUG_ENABLED
@@ -668,6 +673,40 @@ static bool PrvParseConfigLevel(const char* s, int* levelP)
 	return false;
 }
 
+// shared memory segment
+static sem_t*           gSem            = SEM_FAILED;
+static int              gShmId          = -1;
+static uint8_t*         gShmData        = NULL;
+
+// typed pointers to shared memory segment
+static PmLogGlobals*    gGlobalsP       = NULL;
+static PmLogContext_*   gGlobalContextP = NULL;
+
+/*********************************************************************/
+/* PrvResolveContext */
+/**
+@brief  Resolve a public PmLogContext pointer to the corresponding
+		PmLogContext_ pointer.
+		Also, resolve a NULL pointer to the real pointer of the
+		global context.
+**********************************************************************/
+static inline PmLogContext_* PrvResolveContext(PmLogContext context)
+{
+	return (context == NULL) ? gGlobalContextP : (PmLogContext_*) context;
+}
+
+/*********************************************************************/
+/* PrvIsGlobalContext */
+/**
+@brief  Returns true if the specified context pointer is for the
+		global context.
+**********************************************************************/
+static inline bool PrvIsGlobalContext(const PmLogContext_* contextP)
+{
+	// context should already have been resolved
+	assert(contextP != NULL);
+	return (contextP == gGlobalContextP);
+}
 
 /*********************************************************************/
 /* PrvInitContext */
@@ -680,6 +719,7 @@ static bool PrvInitContext(const char* contextName, const char* levelStr,
 {
 	PmLogErr		logErr;
 	PmLogContext	context;
+	PmLogContext_   *contextP;
 	int				level;
 
 	errMsg[ 0 ] = 0;
@@ -710,9 +750,109 @@ static bool PrvInitContext(const char* contextName, const char* levelStr,
 		return false;
 	}
 
+	/* initializing context flags with global values by default */
+	contextP = PrvResolveContext(context);
+	if (contextP == NULL)
+	{
+		mysprintf(errMsg, errMsgBuffSize, "Error setting context flags: %s",
+			PmLogGetErrDbgString(kPmLogErr_ContextNotFound));
+		return false;
+	}
+
+	if (gGlobalsP != NULL)
+	{
+		contextP->info.flags = gGlobalsP->flags;
+	}
 	return true;
 }
 
+/***********************************************************************
+ * PrvParseContextFlag
+ *
+ * @brief              Parses logging context flag.
+ * @param[in]  line    Config file line to parse.
+ * @param[out] flagP   Parsed context flag.
+ * @param[out] setP    Parsed context flag value to set.
+ * @param[in]  lineNum Number of config file line being parsed.
+ * @return             True on success or false if parsing fails.
+ **********************************************************************/
+bool PrvParseContextFlag(const char * line, int* flagP, bool* setP, int lineNum)
+{
+	char errMsg[ 256 ];
+	char key[ 256 ];
+	char val[ 256 ];
+
+	if(!ParseKeyValue(line, key, sizeof(key), val, sizeof(val)))
+	{
+		return false;
+	}
+
+	if (strcmp(key, LOG_PROCESS_IDS_TAG) == 0)
+	{
+		*flagP = kPmLogFlag_LogProcessIds;
+	}
+	else if (strcmp(key, LOG_THREAD_IDS_TAG) == 0)
+	{
+		*flagP = kPmLogFlag_LogThreadIds;
+	}
+	else if (strcmp(key, LOG_TO_CONSOLE_TAG) == 0)
+	{
+		*flagP = kPmLogFlag_LogToConsole;
+	}
+	else
+	{
+		return false;
+	}
+
+	if(!ParseBool(val, setP, errMsg, sizeof(errMsg)))
+	{
+		ErrPrint("Config error on %s: Line %d: Failed to parse: %s\n",
+				kConfigFile, lineNum, errMsg);
+		return false;
+	}
+
+	return true;
+}
+
+/*********************************************************************/
+/* PrvSetFlag */
+/**
+@brief  Set or clear the flag bit as indicated.
+**********************************************************************/
+static void PrvSetFlag(int* flagsP, int flagValue, bool set)
+{
+	if (set)
+	{
+		*flagsP = *flagsP | flagValue;
+	}
+	else
+	{
+		*flagsP = *flagsP & (~flagValue);
+	}
+}
+
+/***********************************************************************
+ * PrvSetContextFlag
+ *
+ * @brief                 Sets / resets logging context flag.
+ * @param[in] contextP    Pointer to target context.
+ * @param[in] flag        Flag to operate on.
+ * @param[in] set         Flag value to set or reset.
+ * @return................Error code
+ ***********************************************************************/
+PmLogErr PrvSetContextFlag(PmLogContext_ * contextP, int flag, bool set)
+{
+	if (contextP == NULL)
+	{
+		return kPmLogErr_InvalidContext;
+	}
+
+	PrvSetFlag(&(contextP->info.flags), flag, set);
+	/* we should also mark flags as overridden */
+	PrvSetFlag(&(contextP->info.flags), kPmLogFlag_Overridden, true);
+
+	return kPmLogErr_None;
+}
 
 /*********************************************************************/
 /* PrvInitContexts */
@@ -722,7 +862,6 @@ static bool PrvInitContext(const char* contextName, const char* levelStr,
 **********************************************************************/
 static bool PrvInitContexts(void)
 {
-	const char* kConfigFile = "@WEBOS_INSTALL_SYSCONFDIR@/PmLog/PmLogContexts.conf";
 	const char* kContextsSection = "[Contexts]";
 
 	FILE*	f;
@@ -735,6 +874,14 @@ static bool PrvInitContexts(void)
 	char	key[ 256 ];
 	char	val[ 256 ];
 	char	errMsg[ 256 ];
+	char    currentContext[ PMLOG_MAX_CONTEXT_NAME_LEN + 1 ];
+	int     flag;
+	bool    set;
+
+	PmLogContext  context;
+	PmLogContext_ *contextP;
+
+	currentContext[ 0 ] = '\0';
 
 	DbgPrint("reading PmLogContexts.conf\n");
 
@@ -783,6 +930,39 @@ static bool PrvInitContexts(void)
 
 		if (inContextsSection)
 		{
+			/* try to parse current line as a flag setting attached
+			   to recently parsed context */
+			if ((currentContext[ 0 ] != '\0') &&
+				PrvParseContextFlag(line, &flag, &set, lineNum))
+			{
+				err = PmLogGetContext(currentContext, &context);
+				if (err != kPmLogErr_None)
+				{
+					ErrPrint("Config error on %s: Line %d: Failed to parse line\n",
+							kConfigFile, lineNum);
+					continue;
+				}
+				contextP = PrvResolveContext(context);
+				if (contextP == NULL)
+				{
+					ErrPrint("Config error on %s: Line %d: Failed to parse line\n",
+							kConfigFile, lineNum);
+					continue;
+				}
+				/* we should avoid setting flags for global context */
+				if (PrvIsGlobalContext(contextP))
+				{
+					continue;
+				}
+				err = PrvSetContextFlag(contextP, flag, set);
+				if (err != kPmLogErr_None)
+				{
+					ErrPrint("Config error on %s: Line %d: Failed to parse line\n",
+							kConfigFile, lineNum);
+				}
+				continue;
+			}
+
 			if (!ParseKeyValue(line, key, sizeof(key),
 				val, sizeof(val)))
 			{
@@ -797,6 +977,10 @@ static bool PrvInitContexts(void)
 					kConfigFile, lineNum, errMsg);
 				continue;
 			}
+
+			/* we've successfully initialized new context - saving its name */
+			strncpy(currentContext, key, PMLOG_MAX_CONTEXT_NAME_LEN);
+			currentContext[ PMLOG_MAX_CONTEXT_NAME_LEN ] = '\0';
 		}
 		else
 		{
@@ -831,24 +1015,6 @@ static bool PrvInitContexts(void)
 
 
 /*********************************************************************/
-/* PrvSetFlag */
-/**
-@brief  Set or clear the flag bit as indicated.
-**********************************************************************/
-static void PrvSetFlag(int* flagsP, int flagValue, bool set)
-{
-	if (set)
-	{
-		*flagsP = *flagsP | flagValue;
-	}
-	else
-	{
-		*flagsP = *flagsP & (~flagValue);
-	}
-}
-
-
-/*********************************************************************/
 /* PrvReadConfigKey */
 /**
 @brief  Read the configuration file config section.
@@ -861,7 +1027,7 @@ static bool PrvReadConfigKey(PmLogGlobals* gGlobalsP,
 	errMsg[0] = 0;
 
 	//------------------------------------------------------
-	if (strcmp(keyStr, "LogProcessIds") == 0)
+	if (strcmp(keyStr, LOG_PROCESS_IDS_TAG) == 0)
 	{
 		bool bLogProcessIds = false;
 		if (!ParseBool(valStr, &bLogProcessIds, errMsg, errMsgBuffSize))
@@ -869,11 +1035,11 @@ static bool PrvReadConfigKey(PmLogGlobals* gGlobalsP,
 			return false;
 		}
 
-		PrvSetFlag(flagsP, kPmLogGlobalsFlag_LogProcessIds, bLogProcessIds);
+		PrvSetFlag(flagsP, kPmLogFlag_LogProcessIds, bLogProcessIds);
 		return true;
 	}
 	//------------------------------------------------------
-	if (strcmp(keyStr, "LogThreadIds") == 0)
+	if (strcmp(keyStr, LOG_THREAD_IDS_TAG) == 0)
 	{
 		bool bLogThreadIds = false;
 		if (!ParseBool(valStr, &bLogThreadIds, errMsg, errMsgBuffSize))
@@ -881,11 +1047,11 @@ static bool PrvReadConfigKey(PmLogGlobals* gGlobalsP,
 			return false;
 		}
 
-		PrvSetFlag(flagsP, kPmLogGlobalsFlag_LogThreadIds, bLogThreadIds);
+		PrvSetFlag(flagsP, kPmLogFlag_LogThreadIds, bLogThreadIds);
 		return true;
 	}
 	//------------------------------------------------------
-	if (strcmp(keyStr, "LogToConsole") == 0)
+	if (strcmp(keyStr, LOG_TO_CONSOLE_TAG) == 0)
 	{
 		bool bLogConsole = false;
 		if (!ParseBool(valStr, &bLogConsole, errMsg, errMsgBuffSize))
@@ -893,7 +1059,7 @@ static bool PrvReadConfigKey(PmLogGlobals* gGlobalsP,
 			return false;
 		}
 
-		PrvSetFlag(flagsP, kPmLogGlobalsFlag_LogToConsole, bLogConsole);
+		PrvSetFlag(flagsP, kPmLogFlag_LogToConsole, bLogConsole);
 		return true;
 	}
 	//------------------------------------------------------
@@ -910,7 +1076,6 @@ static bool PrvReadConfigKey(PmLogGlobals* gGlobalsP,
 **********************************************************************/
 static bool PrvReadGlobalConfig(PmLogGlobals* gGlobalsP)
 {
-	const char* kConfigFile = "@WEBOS_INSTALL_SYSCONFDIR@/PmLog/PmLogContexts.conf";
 	const char* kConfigSection = "[Config]";
 
 	FILE*	f;
@@ -1018,16 +1183,6 @@ static bool PrvReadGlobalConfig(PmLogGlobals* gGlobalsP)
 
 
 //#######################################################################
-
-
-// shared memory segment
-static sem_t*			gSem			= SEM_FAILED;
-static int				gShmId			= -1;
-static uint8_t*			gShmData		= NULL;
-
-// typed pointers to shared memory segment
-static PmLogGlobals*	gGlobalsP		= NULL;
-static PmLogContext_*	gGlobalContextP	= NULL;
 
 
 /*********************************************************************/
@@ -1326,20 +1481,6 @@ void PmLogPrvUnlock(void)
 
 
 /*********************************************************************/
-/* PrvResolveContext */
-/**
-@brief  Resolve a public PmLogContext pointer to the corresponding
-		PmLogContext_ pointer.
-		Also, resolve a NULL pointer to the real pointer of the
-		global context.
-**********************************************************************/
-static inline PmLogContext_* PrvResolveContext(PmLogContext context)
-{
-	return (context == NULL) ? gGlobalContextP : (PmLogContext_*) context;
-}
-
-
-/*********************************************************************/
 /* PrvExportContext */
 /**
 @brief  Convert a private PmLogContext_ pointer to the corresponding
@@ -1348,20 +1489,6 @@ static inline PmLogContext_* PrvResolveContext(PmLogContext context)
 static inline PmLogContext PrvExportContext(const PmLogContext_* contextP)
 {
 	return (contextP == NULL) ? NULL : &contextP->info;
-}
-
-
-/*********************************************************************/
-/* PrvIsGlobalContext */
-/**
-@brief  Returns true if the specified context pointer is for the
-		global context.
-**********************************************************************/
-static inline bool PrvIsGlobalContext(const PmLogContext_* contextP)
-{
-	// context should already have been resolved
-	assert(contextP != NULL);
-	return (contextP == gGlobalContextP);
 }
 
 
@@ -1940,6 +2067,10 @@ static bool HandleLogLibCommand(const char* msg)
 {
 	const char*  kLogLibCmdPrefix    = "!loglib ";
 	const size_t kLogLibCmdPrefixLen = 8;
+	int contextsNumber, contextIndex;
+	PmLogContext  context;
+	PmLogContext_ *contextP;
+	PmLogErr      logErr;
 
 	if (strncmp(msg, kLogLibCmdPrefix, kLogLibCmdPrefixLen) != 0)
 	{
@@ -1952,6 +2083,28 @@ static bool HandleLogLibCommand(const char* msg)
 	{
 		DbgPrint("HandleLogLibCommand: re-loading global config\n");
 		(void) PrvReadGlobalConfig(gGlobalsP);
+		/* updating all context flags that preserved defaults */
+		logErr = PmLogGetNumContexts(&contextsNumber);
+		if (logErr != kPmLogErr_None)
+		{
+			ErrPrint("No contexts found. Error no: %d", logErr);
+			return false;
+		}
+		for (contextIndex = 0; contextIndex < contextsNumber; ++contextIndex)
+		{
+			logErr = PmLogGetIndContext(contextIndex, &context);
+			if(logErr != kPmLogErr_None)
+			{
+				ErrPrint("Context no %d not found. Error no: %d", contextIndex, logErr);
+				continue;
+			}
+			contextP = PrvResolveContext(context);
+			if ((contextP != NULL) && (gGlobalsP != NULL) &&
+				!(contextP->info.flags & kPmLogFlag_Overridden))
+			{
+				contextP->info.flags = gGlobalsP->flags;
+			}
+		}
 		return true;
 	}
 
@@ -1984,12 +2137,12 @@ static PmLogErr PrvLogWrite(PmLogContext_* contextP, PmLogLevel level,
 
 	identStr = __progname;
 
-	if ((gGlobalsP->flags & kPmLogGlobalsFlag_LogProcessIds) ||
-		(gGlobalsP->flags & kPmLogGlobalsFlag_LogThreadIds))
+	if ((contextP->info.flags & kPmLogFlag_LogProcessIds) ||
+		(contextP->info.flags & kPmLogFlag_LogThreadIds))
 	{
 		pid = getpid();
 		tid = gettid();
-		if (gGlobalsP->flags & kPmLogGlobalsFlag_LogThreadIds &&
+		if (contextP->info.flags & kPmLogFlag_LogThreadIds &&
 			(tid != pid))
 		{
 			mysprintf(ptidStr, sizeof(ptidStr), "[%d:%d]: ", (int) pid,
@@ -2017,7 +2170,7 @@ static PmLogErr PrvLogWrite(PmLogContext_* contextP, PmLogLevel level,
 
 	syslog(level, "%s%s%s", ptidStr, componentStr, s);
 
-	if (gGlobalsP->flags & kPmLogGlobalsFlag_LogToConsole)
+	if (contextP->info.flags & kPmLogFlag_LogToConsole)
 	{
 		const PmLogConsole* consoleConfP = &gGlobalsP->consoleConf;
 

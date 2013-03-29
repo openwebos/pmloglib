@@ -53,12 +53,13 @@ PmLogContext_;
 #define PMLOG_SIGNATURE			0x504C6702	// 'PLg' + 0x02
 
 
-// Flag values for PmLogGlobals.flags
+// Flag values for per context and global flags
 enum
 {
-	kPmLogGlobalsFlag_LogProcessIds	= 0x0001,
-	kPmLogGlobalsFlag_LogThreadIds	= 0x0002,
-	kPmLogGlobalsFlag_LogToConsole	= 0x0004
+	kPmLogFlag_LogProcessIds = 0x0001,
+	kPmLogFlag_LogThreadIds  = 0x0002,
+	kPmLogFlag_LogToConsole  = 0x0004,
+	kPmLogFlag_Overridden    = 0x0008  /* context flags differ from the global ones */
 };
 
 
