@@ -36,6 +36,8 @@
 #include <sys/syslog.h>
 #include <sys/shm.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 
 // take advantage of glibc
@@ -1217,6 +1219,7 @@ static void __attribute ((constructor)) init_function(void)
 	Dl_info		dlInfo;
 	int			result;
 	const char*	libFilePath;
+	mode_t      mode;
 
 	// get/create the PmLogLib semaphore
 
@@ -1224,7 +1227,9 @@ static void __attribute ((constructor)) init_function(void)
 	// under /dev/shm, with names of the form sem.<name>
 	DbgPrint("Opening sem\n");
 
+	mode = umask(0);
 	sem = sem_open("PmLogLib", O_CREAT, 0666, 1);
+	umask(mode);
 	if (sem == SEM_FAILED)
 	{
 		err = errno;
