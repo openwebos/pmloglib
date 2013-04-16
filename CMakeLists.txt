@@ -30,7 +30,7 @@ endif()
 
 include(webOS/webOS)
 webos_modules_init(1 0 0 QUALIFIER RC3)
-webos_component(2 1 0)
+webos_component(2 2 0)
 
 # Build the private interface to PmLogLib (PmLogLib-private)
 # To enable this option run "cmake -D BUILD_PRIVATE=ON"
