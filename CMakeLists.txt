@@ -1,6 +1,7 @@
 # @@@LICENSE
 #
-#      Copyright (c) 2007-2012 Hewlett-Packard Development Company, L.P.
+# Copyright (c) 2007-2012 Hewlett-Packard Development Company, L.P.
+# Copyright (c) 2013 LG Electronics, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -40,6 +41,16 @@ if(BUILD_PRIVATE)
 	return()
 endif()
 
+include(FindPkgConfig)
+
+pkg_check_modules(GLIB2 REQUIRED glib-2.0)
+include_directories(${GLIB2_INCLUDE_DIRS})
+webos_add_compiler_flags(ALL ${GLIB2_CFLAGS_OTHER})
+
+pkg_check_modules(PBNJSON_C REQUIRED pbnjson_c)
+include_directories(${PBNJSON_C_INCLUDE_DIRS})
+webos_add_compiler_flags(ALL ${PBNJSON_C_CFLAGS_OTHER})
+
 webos_build_pkgconfig(files/pkgconfig/PmLogLib)
 include_directories(include/public include/private)
 
@@ -48,8 +59,13 @@ webos_add_linker_options(ALL --version-script=${CMAKE_SOURCE_DIR}/src/PmLogLibEx
 webos_add_linker_options(ALL --no-undefined)
 
 webos_configure_source_files(SOURCE_FILES src/PmLogLib.c)
+webos_configure_header_files(include/public)
 add_library(PmLogLib SHARED ${SOURCE_FILES})
-target_link_libraries(PmLogLib dl pthread)
+target_link_libraries(PmLogLib ${GLIB2_LDFLAGS} ${PBNJSON_C_LDFLAGS} dl pthread)
 webos_build_library()
+
+# Default config file for pmloglib
+# Each component should provide its own config file
+webos_build_configured_file(files/conf/pmlog/default.conf SYSCONFDIR pmlog.d)
 
 webos_config_build_doxygen(doc Doxyfile)

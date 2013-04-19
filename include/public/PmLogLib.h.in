@@ -1,6 +1,7 @@
 // @@@LICENSE
 //
-//      Copyright (c) 2007-2012 Hewlett-Packard Development Company, L.P.
+// Copyright (c) 2007-2012 Hewlett-Packard Development Company, L.P.
+// Copyright (c) 2013 LG Electronics, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,17 +25,17 @@
  * This library supports instrumenting code to produce runtime text output
  * to indicate run status.
  * We differentiate output into two types, tracing and logging.
- *   
+ *
  * Tracing code is for detailed debugging for use by individual component
  * development.  It is turned on only locally and only as needed, and is
  * *not* included in the main build or release product.  The system
  * support for tracing code will not be as efficient in this case as it
  * will lean more towards ease of use.
- *  
- * Logging code, on the other hand, is included in the main build and 
- * release product.  The purpose is to log errors and important diagnostics 
+ *
+ * Logging code, on the other hand, is included in the main build and
+ * release product.  The purpose is to log errors and important diagnostics
  * information in the device logs.
- * 
+ *
  * Logging code may also support more verbose diagnostic
  * levels which may be turned on dynamicly as needed on the device.  The
  * intent of the system is that logging code which is not enabled has
@@ -44,15 +45,15 @@
  * context that is managed by the PmLog system.  The context includes a
  * memory field that can be quickly checked by the logging call to know
  * whether the call is enabled.
- *  
+ *
  * <em>Example usage:</em>
- * 
+ *
  * @code
  *	PmLogContext	gMyContext;
- * 
+ *
  *	void MyComponentInit(void)
  *	{
- * 		// Get a pointer to the context for this component.  
+ * 		// Get a pointer to the context for this component.
  * 		// The context is created if it does not already exist.
  * 		PmLogGetContext("PmMyComponent", &gMyContext);
  *	}
@@ -60,7 +61,7 @@
  *	void MyComponentRun(void)
  *	{
  * 		int err;
- * 
+ *
  *		PmLogPrintDebug(gMyContext, "Calling Foo");
  * 		err = Foo();
  * 		if (err)
@@ -69,7 +70,7 @@
  * 		}
  * 	}
  * @endcode
- * 
+ *
  **********************************************************************/
 
 /**
@@ -203,31 +204,35 @@ typedef struct
 }
 PmLogContextInfo;
 
-typedef const PmLogContextInfo* PmLogContext; 
+typedef const PmLogContextInfo* PmLogContext;
 
 
 /*********************************************************************/
-/* kPmLogGlobalContext */
+/* kPmLogDefaultContext */
 /**
 @brief  For efficiency, every client component should get a context
 		using PmLogGetContext and use that for subsequent logging calls.
 		But, for simplicity of the client we'll also allow specifying
-		the global context via a special value.  But in that case,
-		the client-side level check can't be made inline, so every log 
+		the default context via a special value.  But in that case,
+		the client-side level check can't be made inline, so every log
 		call will incur the cost of the library call and parameter
 		evaluation.
 **********************************************************************/
-#define kPmLogGlobalContext	((PmLogContext) NULL)
+#define kPmLogDefaultContext ((PmLogContext) NULL)
+// For backward compatibility
+#define kPmLogGlobalContext kPmLogDefaultContext
 
 
 /*********************************************************************/
-/* kPmLogGlobalContextName */
+/* kPmLogDefaultContextName */
 /**
-@brief  This is the context name reported for the global context.
+@brief  This is the context name reported for the default context.
 		Note that it uses special characters so it won't conflict
 		with user-defined context names.
 **********************************************************************/
-#define kPmLogGlobalContextName "<global>"
+#define kPmLogDefaultContextName "<default>"
+// For backward compatibility
+#define kPmLogGlobalContextName kPmLogDefaultContextName
 
 
 /*********************************************************************/
@@ -262,7 +267,7 @@ PmLogErr PmLogGetIndContext(int contextIndex, PmLogContext* pContext);
 		NULL if the context does not exist.
 
 		If contextName is NULL, an error is returned.
-		
+
 @return Error code:
 			kPmLogErr_None
 			kPmLogErr_InvalidParameter
@@ -276,12 +281,12 @@ PmLogErr PmLogFindContext(const char* contextName, PmLogContext* pContext);
 /* PmLogGetContext */
 /**
 @brief  Returns/creates the logging context for the named context.
-		
+
 		If contextName is NULL, returns the global context.
-		
+
 		Context names must be 1..31 characters long, and each
 		character must be one of A-Z, a-z, 0-9, '_', '-', '.'.
-		
+
 		Component hierarchies can be indicated using '.' as the path
 		separator.
 		E.g. "FOO.BAR" would indicate the "BAR" subcomponent
@@ -365,7 +370,7 @@ PmLogErr PmLogSetContextLevel(PmLogContext context, PmLogLevel level);
 /**
 @brief  Returns true if and only if the specified message priority
 		is enabled in the specified context.
-		
+
 proto:	bool PmLogIsEnabled(PmLogContext context, PmLogLevel level);
 **********************************************************************/
 #define PmLogIsEnabled(context, level)	\
@@ -449,7 +454,7 @@ PmLogErr PmLogPrint_(PmLogContext context, PmLogLevel level,
 /**
 @brief  Logs the specified formatted text, tagged with the specified
 		level, to the specified context.
-		
+
 proto:	PmLogErr PmLogPrint(PmLogContext context, PmLogLevel level,
 			const char* fmt, ...);
 
@@ -471,7 +476,7 @@ proto:	PmLogErr PmLogPrint(PmLogContext context, PmLogLevel level,
 /**
 @brief  Logs the specified formatted text, tagged as error level,
 		to the specified context.
-		
+
 proto:	void PmLogPrintError(PmLogContext context,
 			const char* fmt, ...);
 **********************************************************************/
@@ -484,7 +489,7 @@ proto:	void PmLogPrintError(PmLogContext context,
 /**
 @brief  Logs the specified formatted text, tagged as warning level,
 		to the specified context.
-		
+
 proto:	void PmLogPrintWarning(PmLogContext context,
 			const char* fmt, ...);
 **********************************************************************/
@@ -497,7 +502,7 @@ proto:	void PmLogPrintWarning(PmLogContext context,
 /**
 @brief  Logs the specified formatted text, tagged as info level,
 		to the specified context.
-		
+
 proto:	void PmLogPrintInfo(PmLogContext context,
 			const char* fmt, ...);
 **********************************************************************/
@@ -510,7 +515,7 @@ proto:	void PmLogPrintInfo(PmLogContext context,
 /**
 @brief  Logs the specified formatted text, tagged as debug level,
 		to the specified context.
-		
+
 proto:	void PmLogPrintDebug(PmLogContext context,
 			const char* fmt, ...);
 **********************************************************************/
@@ -545,7 +550,7 @@ PmLogErr PmLogVPrint_(PmLogContext context, PmLogLevel level,
 /**
 @brief  Logs the specified formatted text, tagged with the specified
 		level, to the specified context.
-		
+
 proto:	PmLogErr PmLogVPrint(PmLogContext context, PmLogLevel level,
 			const char* fmt, va_list args);
 
@@ -567,7 +572,7 @@ proto:	PmLogErr PmLogVPrint(PmLogContext context, PmLogLevel level,
 /**
 @brief  Logs the specified formatted text, tagged as error level,
 		to the specified context.
-		
+
 proto:	void PmLogVPrintError(PmLogContext context,
 			const char* fmt, va_list args);
 **********************************************************************/
@@ -580,7 +585,7 @@ proto:	void PmLogVPrintError(PmLogContext context,
 /**
 @brief  Logs the specified formatted text, tagged as warning level,
 		to the specified context.
-		
+
 proto:	void PmLogVPrintWarning(PmLogContext context,
 			const char* fmt, va_list args);
 **********************************************************************/
@@ -593,7 +598,7 @@ proto:	void PmLogVPrintWarning(PmLogContext context,
 /**
 @brief  Logs the specified formatted text, tagged as info level,
 		to the specified context.
-		
+
 proto:	void PmLogVPrintInfo(PmLogContext context,
 			const char* fmt, va_list args);
 **********************************************************************/
@@ -606,7 +611,7 @@ proto:	void PmLogVPrintInfo(PmLogContext context,
 /**
 @brief  Logs the specified formatted text, tagged as debug level,
 		to the specified context.
-		
+
 proto:	void PmLogVPrintDebug(PmLogContext context,
 			const char* fmt, va_list args);
 **********************************************************************/
@@ -638,7 +643,7 @@ typedef struct PmLogDumpFormat PmLogDumpFormat;
 @brief  Logs the specified binary data as text dump to the specified
 		context. Specify kPmLogDumpFormatDefault for the formatting
 		parameter.
-		
+
 		For efficiency, this API should not be used directly, but
 		instead use the wrappers (PmLogDumpData, ...) that
 		bypass the library call if the logging is not enabled.
@@ -662,7 +667,7 @@ PmLogErr PmLogDumpData_(PmLogContext context, PmLogLevel level,
 @brief  Logs the specified binary data as text dump to the specified
 		context.  Specify kPmLogDumpFormatDefault for the formatting
 		parameter.
-		
+
 proto:	PmLogErr PmLogDumpData(PmLogContext context, PmLogLevel level,
 			const void* data, size_t numBytes,
 			const PmLogDumpFormat* format);
@@ -687,7 +692,7 @@ proto:	PmLogErr PmLogDumpData(PmLogContext context, PmLogLevel level,
 /**
 @brief  Logs the specified binary data as text dump, tagged as error level,
 		to the specified context.
-		
+
 proto:	void PmLogDumpDataError(PmLogContext context,
 			const void* data, size_t numBytes,
 			const PmLogDumpFormat* format);
@@ -701,7 +706,7 @@ proto:	void PmLogDumpDataError(PmLogContext context,
 /**
 @brief  Logs the specified binary data as text dump, tagged as warning level,
 		to the specified context.
-		
+
 proto:	void PmLogDumpDataWarning(PmLogContext context,
 			const void* data, size_t numBytes,
 			const PmLogDumpFormat* format);
@@ -715,7 +720,7 @@ proto:	void PmLogDumpDataWarning(PmLogContext context,
 /**
 @brief  Logs the specified binary data as text dump, tagged as info level,
 		to the specified context.
-		
+
 proto:	void PmLogDumpDataInfo(PmLogContext context,
 			const void* data, size_t numBytes,
 			const PmLogDumpFormat* format);
@@ -729,7 +734,7 @@ proto:	void PmLogDumpDataInfo(PmLogContext context,
 /**
 @brief  Logs the specified binary data as text dump, tagged as debug level,
 		to the specified context.
-		
+
 proto:	void PmLogDumpDataDebug(PmLogContext context,
 			const void* data, size_t numBytes,
 			const PmLogDumpFormat* format);
@@ -762,7 +767,7 @@ proto:	void PmLogDumpDataDebug(PmLogContext context,
 			#define PMLOG_TRACE_CONTEXT		kPmLogGlobalContext
 		#endif
 	#endif
-	
+
 	#define	PMLOG_TRACE(...)	\
 		(void) PmLogPrint(PMLOG_TRACE_CONTEXT, kPmLogLevel_Debug, __VA_ARGS__)
 
@@ -797,7 +802,7 @@ const char* PmLogLevelToString(PmLogLevel level);
  * PmLogStringToLevel
  *
  * Given a symbolic level string, returning the matching numeric value.
- * "none"  => -1 (kPmLogLevel_None) 
+ * "none"  => -1 (kPmLogLevel_None)
  * "emerg" =>  0 (kPmLogLevel_Emergency)
  * etc.
  * Returns NULL if the level string is not matched.
@@ -824,7 +829,7 @@ const char* PmLogFacilityToString(int facility);
  * PmLogStringToFacility
  *
  * Given a symbolic facility string, returning the matching numeric value.
- * "kern" => LOG_KERN 
+ * "kern" => LOG_KERN
  * "user" =>  LOG_USER
  * etc.
  * Returns NULL if the facility string is not matched.
@@ -983,6 +988,6 @@ proto:	void PmLogDebug(PmLogContext context, ...);
 
 #ifdef __cplusplus
 }
-#endif	
+#endif
 
 #endif // PMLOGLIB_H

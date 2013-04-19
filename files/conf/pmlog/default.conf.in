@@ -1,0 +1,26 @@
+{
+	"contexts" : [
+		{
+			"name" : "<default>",
+			"level" : "info",
+			"logProcessIds" : false,
+			"logThreadIds" : false,
+			"logToConsole" : false,
+			"rules" : [
+				{"filter" : "*.*", "output" : "stdlog"},
+				{"filter" : "kern.!info", "output" : "-stdlog"}
+			]
+		}
+	],
+
+	"outputs" : [
+		{
+			"name" : "stdlog",
+			"file" : "@WEBOS_INSTALL_LOGDIR@/messages",
+			"maxSize" : 2000,
+			"rotations" : 5
+		}
+	],
+
+	"KeyValueValidation" : true
+}

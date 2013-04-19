@@ -1,6 +1,7 @@
 // @@@LICENSE
 //
-//      Copyright (c) 2007-2012 Hewlett-Packard Development Company, L.P.
+// Copyright (c) 2007-2012 Hewlett-Packard Development Company, L.P.
+// Copyright (c) 2013 LG Electronics, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,16 +79,16 @@ PmLogConsole;
 // memory segment.  The size should be kept reasonable, e.g. < 16K. 
 typedef struct
 {
-	uint32_t		signature;
-	int				reserved;
-	int				maxUserContexts;
-	int				numUserContexts;
+	uint32_t        signature;
+	int             reserved;
+	int             maxUserContexts;
+	int             numUserContexts;
+	int             kvValidateFlag;
 
-	int				flags;
-	PmLogConsole	consoleConf;
+	PmLogConsole    consoleConf;
 
-	PmLogContext_	globalContext;
-	PmLogContext_	userContexts[ PMLOG_MAX_NUM_CONTEXTS ];
+	PmLogContext_   globalContext;
+	PmLogContext_   userContexts[ PMLOG_MAX_NUM_CONTEXTS ];
 }
 PmLogGlobals;
 
@@ -128,9 +129,24 @@ void PmLogPrvUnlock(void);
 PmLogErr PmLogPrvTest(const char* cmd, void* data);
 
 
+/*********************************************************************/
+/* PmLogPrvReadConfigs */
+/**
+@brief  Reads all the config files from @WEBOS_INSTALL_SYSCONFDIR@/pmlog.d
+        directory and executes the supplied function on each of the config
+        file. This API is only required for pmlogdaemon for reading config
+        files.
+
+@param  fn_ptr fn_ptr is a pointer to a function which acceptes a file_name
+        as a constant string and returns a boolean. PmLogPrvReadConfigs() will
+        call (*fn_ptr) function for each file obtained from the /etc/pmlog.d
+        directory.
+**********************************************************************/
+bool PmLogPrvReadConfigs(bool (*fn_ptr)(const char *file_name));
+
 #ifdef __cplusplus
 }
-#endif	
+#endif
 
 
 #endif // PMLOGLIBPRV_H

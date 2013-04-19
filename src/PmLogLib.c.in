@@ -1,6 +1,7 @@
 // @@@LICENSE
 //
-//      Copyright (c) 2007-2012 Hewlett-Packard Development Company, L.P.
+// Copyright (c) 2007-2012 Hewlett-Packard Development Company, L.P.
+// Copyright (c) 2013 LG Electronics, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,10 +39,13 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <glib.h>
+#include <pbnjson.h>
 
 
 // take advantage of glibc
 extern const char*	__progname;
+
 
 
 /***********************************************************************
@@ -61,12 +65,13 @@ pid_t gettid(void)
  ***********************************************************************/
 #define COMPONENT_PREFIX	"PmLogLib "
 
-#define LOG_PROCESS_IDS_TAG "LogProcessIds"
-#define LOG_THREAD_IDS_TAG  "LogThreadIds"
-#define LOG_TO_CONSOLE_TAG  "LogToConsole"
+#define LOG_PROCESS_IDS_TAG "logProcessIds"
+#define LOG_THREAD_IDS_TAG  "logThreadIds"
+#define LOG_TO_CONSOLE_TAG  "logToConsole"
+#define LOG_LEVEL_TAG       "level"
 
-#define kConfigFile "@WEBOS_INSTALL_SYSCONFDIR@/PmLog/PmLogContexts.conf"
 #define BUFFER_LEN 1024
+#define CONFIG_DIR "@WEBOS_INSTALL_SYSCONFDIR@/pmlog.d"
 
 // don't check in with this on!
 //#define DEBUG_ENABLED
@@ -345,74 +350,6 @@ static void mysprintf(char* dst, size_t dstSize, const char* fmt, ...)
 	va_end(args);
 }
 
-
-/***********************************************************************
- * ParseBool
- ***********************************************************************/
-static bool ParseBool(const char* valStr, bool* bP,
-	char* errMsg, size_t errMsgBuffSize)
-{
-	errMsg[ 0 ] = 0;
-
-	if (strcasecmp(valStr, "false") == 0)
-	{
-		*bP = false;
-		return true;
-	}
-
-	if (strcasecmp(valStr, "true") == 0)
-	{
-		*bP = true;
-		return true;
-	}
-
-	mystrcpy(errMsg, errMsgBuffSize, "boolean value expected");
-	return false;
-}
-
-
-/***********************************************************************
- * ParseKeyValue
- *
- * If the given string is of the form "KEY=VALUE" copy the given
- * key and value strings into the specified buffers and return true,
- * otherwise return false.
- * Key may not be empty string, but value may be.
- ***********************************************************************/
-static bool ParseKeyValue(const char* arg, char* keyBuff, size_t keyBuffSize,
-	char* valBuff, size_t valBuffSize)
-{
-	const char* sepStr;
-	size_t		keyLen;
-	const char* valStr;
-	size_t		valLen;
-
-	sepStr = strchr(arg, '=');
-	if ((sepStr == NULL) || (sepStr <= arg))
-		return false;
-
-	keyLen = sepStr - arg;
-	if (keyLen >= keyBuffSize)
-		return false;
-
-	memcpy(keyBuff, arg, keyLen);
-	keyBuff[keyLen] = 0;
-
-	valStr = sepStr + 1;
-	valLen = strlen(valStr);
-	if (valLen >= valBuffSize)
-		return false;
-
-	memcpy(valBuff, valStr, valLen);
-	valBuff[valLen] = 0;
-
-	return true;
-}
-
-
-//#######################################################################
-
-
 /***********************************************************************
  * IntLabel
  *
@@ -421,7 +358,7 @@ static bool ParseKeyValue(const char* arg, char* keyBuff, size_t keyBuffSize,
 typedef struct
 {
 	const char* s;
-	int			n;
+	int n;
 }
 IntLabel;
 
@@ -677,13 +614,13 @@ static bool PrvParseConfigLevel(const char* s, int* levelP)
 }
 
 // shared memory segment
-static sem_t*           gSem            = SEM_FAILED;
-static int              gShmId          = -1;
-static uint8_t*         gShmData        = NULL;
+static sem_t            *gSem            = SEM_FAILED;
+static int              gShmId           = -1;
+static uint8_t          *gShmData        = NULL;
 
 // typed pointers to shared memory segment
-static PmLogGlobals*    gGlobalsP       = NULL;
-static PmLogContext_*   gGlobalContextP = NULL;
+static PmLogGlobals     *gGlobalsP       = NULL;
+static PmLogContext_    *gGlobalContextP = NULL;
 
 /*********************************************************************/
 /* PrvResolveContext */
@@ -762,58 +699,10 @@ static bool PrvInitContext(const char* contextName, const char* levelStr,
 		return false;
 	}
 
-	if (gGlobalsP != NULL)
+	if (gGlobalContextP)
 	{
-		contextP->info.flags = gGlobalsP->flags;
+		contextP->info.flags = gGlobalContextP->info.flags;
 	}
-	return true;
-}
-
-/***********************************************************************
- * PrvParseContextFlag
- *
- * @brief              Parses logging context flag.
- * @param[in]  line    Config file line to parse.
- * @param[out] flagP   Parsed context flag.
- * @param[out] setP    Parsed context flag value to set.
- * @param[in]  lineNum Number of config file line being parsed.
- * @return             True on success or false if parsing fails.
- **********************************************************************/
-bool PrvParseContextFlag(const char * line, int* flagP, bool* setP, int lineNum)
-{
-	char errMsg[ 256 ];
-	char key[ 256 ];
-	char val[ 256 ];
-
-	if(!ParseKeyValue(line, key, sizeof(key), val, sizeof(val)))
-	{
-		return false;
-	}
-
-	if (strcmp(key, LOG_PROCESS_IDS_TAG) == 0)
-	{
-		*flagP = kPmLogFlag_LogProcessIds;
-	}
-	else if (strcmp(key, LOG_THREAD_IDS_TAG) == 0)
-	{
-		*flagP = kPmLogFlag_LogThreadIds;
-	}
-	else if (strcmp(key, LOG_TO_CONSOLE_TAG) == 0)
-	{
-		*flagP = kPmLogFlag_LogToConsole;
-	}
-	else
-	{
-		return false;
-	}
-
-	if(!ParseBool(val, setP, errMsg, sizeof(errMsg)))
-	{
-		ErrPrint("Config error on %s: Line %d: Failed to parse: %s\n",
-				kConfigFile, lineNum, errMsg);
-		return false;
-	}
-
 	return true;
 }
 
@@ -857,336 +746,239 @@ PmLogErr PrvSetContextFlag(PmLogContext_ * contextP, int flag, bool set)
 	return kPmLogErr_None;
 }
 
-/*********************************************************************/
-/* PrvInitContexts */
-/**
-@brief  Read the configuration file for pre-defined contexts and
-		context levels.
-**********************************************************************/
-static bool PrvInitContexts(void)
+static void parse_config_flags(jvalue_ref j_context, const gchar *file_name, const char *context_name)
 {
-	const char* kContextsSection = "[Contexts]";
-
-	FILE*	f;
-	int		err;
-	int		lineNum;
-	char	line[ 512 ];
-	size_t	lineLen;
-	bool	inContextsSection;
-	bool	gotContextsSection;
-	char	key[ 256 ];
-	char	val[ 256 ];
-	char	errMsg[ 256 ];
-	char    currentContext[ PMLOG_MAX_CONTEXT_NAME_LEN + 1 ];
-	int     flag;
-	bool    set;
-
+	jvalue_ref    value;
+	bool          ret;
+	bool          flag_value;
+	int           flags = 0;
 	PmLogContext  context;
-	PmLogContext_ *contextP;
+	PmLogContext_ *context_ptr;
+	int           err;
 
-	currentContext[ 0 ] = '\0';
+	ret = jobject_get_exists(j_context, j_cstr_to_buffer(LOG_PROCESS_IDS_TAG), &value);
+	if (ret) { //found logProcessIds
+		if (CONV_OK == jboolean_get(value, &flag_value)) {
+			if (true == flag_value)
+				flags |= kPmLogFlag_LogProcessIds;
+			else
+				flags &= ~kPmLogFlag_LogProcessIds;
+		} else {
+			ErrPrint("INV_PSID {\"file\":\"%s\",\"context\":\"%s\"}",
+			         file_name, context_name);
+		}
+	}
 
-	DbgPrint("reading PmLogContexts.conf\n");
+	ret = jobject_get_exists(j_context, j_cstr_to_buffer(LOG_THREAD_IDS_TAG), &value);
+	if (ret) { //found logThreadIds
+		if (CONV_OK == jboolean_get(value, &flag_value)) {
+			if (true == flag_value)
+				flags |= kPmLogFlag_LogThreadIds;
+			else
+				flags &= ~kPmLogFlag_LogThreadIds;
+		} else {
+			ErrPrint("INV_THID {\"file\":\"%s\",\"context\":\"%s\"}",
+			         file_name, context_name);
+		}
+	}
 
-	f = fopen(kConfigFile, "r");
-	if (f == NULL)
-	{
-		err = errno;
-		ErrPrint("Config error on %s: Failed open: %s\n", kConfigFile,
-			strerror(err));
+	ret = jobject_get_exists(j_context, j_cstr_to_buffer(LOG_TO_CONSOLE_TAG), &value);
+	if (ret) { //found logToConsole
+		if (CONV_OK == jboolean_get(value, &flag_value)) {
+			if (true == flag_value)
+				flags |= kPmLogFlag_LogToConsole;
+			else
+				flags &= ~kPmLogFlag_LogToConsole;
+		} else {
+			ErrPrint("INV_LOG_TO_CON {\"file\":\"%s\",\"context\":\"%s\"}",
+			         file_name, context_name);
+		}
+	}
+
+	if (!flags)
+		return;
+
+	err = PmLogGetContext(context_name, &context);
+	if (kPmLogErr_None != err) {
+		ErrPrint("FLG_CONTEXT_ERR {\"file\":\"%s\",\"context\":\"%s\"}",
+		         file_name, context_name);
+		return;
+	}
+
+	context_ptr = PrvResolveContext(context);
+	if (!context_ptr) {
+		ErrPrint("FLG_RSVL_ERR {\"file\":\"%s\",\"context\":\"%s\"}",
+		         file_name, context_name);
+		return;
+	}
+
+	//Set all the flags at once
+	err = PrvSetContextFlag(context_ptr, flags, true);
+	if (err != kPmLogErr_None) {
+		ErrPrint("SET_CTX_FLG_ERR {\"file\":\"%s\",\"context\":\"%s\"}",
+		         file_name, context_name);
+	}
+}
+
+static bool parse_json_file(const char *file_name)
+{
+	int         index;
+	bool        found_context = false;
+	JSchemaInfo schemainfo;
+	jvalue_ref  parsed;
+	jvalue_ref  contexts_array;
+	bool        ret;
+	jvalue_ref  value;
+
+	jschema_info_init(&schemainfo, jschema_all(), NULL, NULL);
+	parsed = jdom_parse_file(file_name, &schemainfo, DOMOPT_INPUT_NOCHANGE);
+	if (jis_null(parsed)) {
+		j_release(&parsed);
+		ErrPrint("JSON_PARSE_ERR {\"file\":\"%s\"}", file_name);
 		return false;
 	}
 
-	inContextsSection = false;
-	gotContextsSection = false;
+	// check "KeyValueValidation" flag from default.conf file
+	if (g_str_has_suffix(file_name, "default.conf")) {
+		ret = jobject_get_exists(parsed,
+		                        j_cstr_to_buffer("KeyValueValidation"),
+		                        &value);
+		if (ret) {
+			bool flag_value;
 
-	lineNum = 0;
-	for (;;)
-	{
-		if (fgets(line, sizeof(line), f) == NULL)
-		{
-			break;
-		}
-
-		lineNum++;
-		lineLen = strlen(line);
-
-		// trim trailing whitespace
-		while ((lineLen > 0) && isspace(line[ lineLen - 1 ]))
-		{
-			line[ lineLen - 1 ] = 0;
-			lineLen--;
-		}
-
-		// ignore comment lines
-		if (line[ 0 ] == '#')
-		{
-			continue;
-		}
-
-		// a blank line ends the section
-		if (line[ 0 ] == 0)
-		{
-			inContextsSection = false;
-			continue;
-		}
-
-		if (inContextsSection)
-		{
-			/* try to parse current line as a flag setting attached
-			   to recently parsed context */
-			if ((currentContext[ 0 ] != '\0') &&
-				PrvParseContextFlag(line, &flag, &set, lineNum))
-			{
-				err = PmLogGetContext(currentContext, &context);
-				if (err != kPmLogErr_None)
-				{
-					ErrPrint("Config error on %s: Line %d: Failed to parse line\n",
-							kConfigFile, lineNum);
-					continue;
-				}
-				contextP = PrvResolveContext(context);
-				if (contextP == NULL)
-				{
-					ErrPrint("Config error on %s: Line %d: Failed to parse line\n",
-							kConfigFile, lineNum);
-					continue;
-				}
-				/* we should avoid setting flags for global context */
-				if (PrvIsGlobalContext(contextP))
-				{
-					continue;
-				}
-				err = PrvSetContextFlag(contextP, flag, set);
-				if (err != kPmLogErr_None)
-				{
-					ErrPrint("Config error on %s: Line %d: Failed to parse line\n",
-							kConfigFile, lineNum);
-				}
-				continue;
+			if (CONV_OK == jboolean_get(value, &flag_value)) {
+				gGlobalsP->kvValidateFlag = (1 == flag_value);
+			} else {
+				ErrPrint("INV_KVFLAG {\"file\":\"%s\"}", file_name);
 			}
-
-			if (!ParseKeyValue(line, key, sizeof(key),
-				val, sizeof(val)))
-			{
-				ErrPrint("Config error on %s: Line %d: Failed to parse line\n",
-					kConfigFile, lineNum);
-				continue;
-			}
-
-			if (!PrvInitContext(key, val, errMsg, sizeof(errMsg)))
-			{
-				ErrPrint("Config error on %s: Line %d: Failed to parse: %s\n",
-					kConfigFile, lineNum, errMsg);
-				continue;
-			}
-
-			/* we've successfully initialized new context - saving its name */
-			strncpy(currentContext, key, PMLOG_MAX_CONTEXT_NAME_LEN);
-			currentContext[ PMLOG_MAX_CONTEXT_NAME_LEN ] = '\0';
-		}
-		else
-		{
-			if (strcmp(line, kContextsSection) == 0)
-			{
-				gotContextsSection = true;
-				inContextsSection = true;
-				continue;
-			}
-
-			//ErrPrint("Config error on %s: Line %d: Unrecognized line\n",
-			//	kConfigFile, lineNum);
-			continue;
 		}
 	}
 
-	if (!gotContextsSection)
-	{
-		ErrPrint("Config error on %s: Section '%s' not defined\n",
-			kConfigFile, kContextsSection);
+	ret = jobject_get_exists(parsed, j_cstr_to_buffer("contexts"), &contexts_array);
+	if (ret) { // found contexts array
+		for (index = 0; index < jarray_size(contexts_array); index++) {
+
+			jvalue_ref j_context;
+
+			j_context = jarray_get(contexts_array, index);
+			if (!jis_null(j_context)) {
+
+				raw_buffer    name;
+				raw_buffer    level;
+				char          err_msg[80];
+
+				name.m_str = NULL;
+				level.m_str = NULL;
+
+				ret = jobject_get_exists(j_context, j_cstr_to_buffer("name"), &value);
+				if (ret) { //found name
+					found_context = true;
+					name = jstring_get(value);
+					if (!name.m_str) {
+						ErrPrint("CTX_NAME_ERR {\"index\":%d,\"file\":\"%s\"}",
+						         index, file_name);
+						goto context_end;
+					}
+				} else {
+					ErrPrint("NO_CTX_NAME {\"index\":%d,\"file\":\"%s\"}",
+					         index, file_name);
+					goto context_end;
+				}
+
+				ret = jobject_get_exists(j_context, j_cstr_to_buffer(LOG_LEVEL_TAG), &value);
+				if (ret) { //found level
+					level = jstring_get(value);
+					if (!level.m_str) {
+						ErrPrint("NO_CTX_LVL {\"context\":\"%s\",\"file\":\"%s\"}",
+						         name.m_str, file_name);
+						goto context_end;
+					}
+				} else {
+					ErrPrint("CTX_LVL_MISSING {\"context\":\"%s\",\"file\":\"%s\"}",
+					         name.m_str, file_name);
+					goto context_end;
+				}
+
+				if (!PrvInitContext(name.m_str, level.m_str, err_msg, sizeof(err_msg))) {
+					ErrPrint("PrvInitContext failed for %s:%s: %s\n",
+					         file_name, name.m_str, err_msg);
+					ErrPrint("INIT_CTX_ERR {\"file\":\"%s\",\"context\":\"%s\",\"err\":\"%s\"}",
+					         file_name, name.m_str, err_msg);
+						goto context_end;
+				}
+
+				// parse optional flags (Ex. LOG_PROCESS_IDS_TAG) for the given context
+				parse_config_flags(j_context, file_name, name.m_str);
+
+			context_end:
+				jstring_free_buffer(name);
+				jstring_free_buffer(level);
+			} // if current entry in CONTEXTS array is valid
+		} // for loop for traversing CONTEXTS array
+	} // if we found a CONTEXTS array
+
+	j_release(&parsed);
+
+	if (!found_context) {
+		ErrPrint("CTX_MISSING {\"file\":\"%s\"}", file_name);
+		return false;
 	}
-
-	(void) fclose(f);
-
-	//---------------------------------------------------
 
 	return true;
 }
 
-
-//#######################################################################
-
-
-/*********************************************************************/
-/* PrvReadConfigKey */
-/**
-@brief  Read the configuration file config section.
-**********************************************************************/
-static bool PrvReadConfigKey(PmLogGlobals* gGlobalsP,
-	const char* keyStr, const char* valStr,	char* errMsg, size_t errMsgBuffSize)
+#define DEFAULT_CONFIG "default.conf"
+bool PmLogPrvReadConfigs(bool (*fn_ptr) (const char *file_name))
 {
-	int*	flagsP = &gGlobalsP->flags;
+	GDir *dir;
+	GError *error = NULL;
+	const char *file_name;
+	char *full_path;
+	bool found_default_conf = false;
 
-	errMsg[0] = 0;
-
-	//------------------------------------------------------
-	if (strcmp(keyStr, LOG_PROCESS_IDS_TAG) == 0)
-	{
-		bool bLogProcessIds = false;
-		if (!ParseBool(valStr, &bLogProcessIds, errMsg, errMsgBuffSize))
-		{
-			return false;
-		}
-
-		PrvSetFlag(flagsP, kPmLogFlag_LogProcessIds, bLogProcessIds);
-		return true;
-	}
-	//------------------------------------------------------
-	if (strcmp(keyStr, LOG_THREAD_IDS_TAG) == 0)
-	{
-		bool bLogThreadIds = false;
-		if (!ParseBool(valStr, &bLogThreadIds, errMsg, errMsgBuffSize))
-		{
-			return false;
-		}
-
-		PrvSetFlag(flagsP, kPmLogFlag_LogThreadIds, bLogThreadIds);
-		return true;
-	}
-	//------------------------------------------------------
-	if (strcmp(keyStr, LOG_TO_CONSOLE_TAG) == 0)
-	{
-		bool bLogConsole = false;
-		if (!ParseBool(valStr, &bLogConsole, errMsg, errMsgBuffSize))
-		{
-			return false;
-		}
-
-		PrvSetFlag(flagsP, kPmLogFlag_LogToConsole, bLogConsole);
-		return true;
-	}
-	//------------------------------------------------------
-
-	mysprintf(errMsg, errMsgBuffSize, "key '%s' not recognized", keyStr);
-	return false;
-}
-
-
-/*********************************************************************/
-/* PrvReadGlobalConfig */
-/**
-@brief  Read the configuration file.
-**********************************************************************/
-static bool PrvReadGlobalConfig(PmLogGlobals* gGlobalsP)
-{
-	const char* kConfigSection = "[Config]";
-
-	FILE*	f;
-	int		err;
-	int		lineNum;
-	char	line[ 512 ];
-	size_t	lineLen;
-	bool	inConfigSection;
-	bool	gotConfigSection;
-	char	key[ 256 ];
-	char	val[ 256 ];
-	char	errMsg[ 256 ];
-
-	DbgPrint("reading global config PmLogContexts.conf\n");
-
-	gGlobalsP->flags = 0;
-
-	f = fopen(kConfigFile, "r");
-	if (f == NULL)
-	{
-		err = errno;
-		ErrPrint("Config error on %s: Failed open: %s\n", kConfigFile,
-			strerror(err));
+	dir = g_dir_open(CONFIG_DIR, 0, &error);
+        if (!dir) {
+		ErrPrint("DIR_OPEN_ERR {\"Error\":\"%s\"}", error->message);
+		g_error_free(error);
 		return false;
+        }
+
+	// default.conf should be the first one
+	full_path = g_build_filename(CONFIG_DIR, DEFAULT_CONFIG, NULL);
+	if (g_file_test(full_path, G_FILE_TEST_IS_REGULAR)) {
+		found_default_conf = true;
+		// execute caller supplied function
+		fn_ptr(full_path);
 	}
+	g_free(full_path);
 
-	inConfigSection = false;
-	gotConfigSection = false;
 
-	lineNum = 0;
-	for (;;)
-	{
-		if (fgets(line, sizeof(line), f) == NULL)
-		{
-			break;
-		}
-
-		lineNum++;
-		lineLen = strlen(line);
-
-		// trim trailing whitespace
-		while ((lineLen > 0) && isspace(line[ lineLen - 1 ]))
-		{
-			line[ lineLen - 1 ] = 0;
-			lineLen--;
-		}
-
-		// ignore comment lines
-		if (line[ 0 ] == '#')
-		{
+	while ((file_name = g_dir_read_name(dir))) {
+		// ignore hidden files or files without ".conf" suffix
+		if ('.' == file_name[0] ||
+		    !g_str_has_suffix (file_name, ".conf")) {
 			continue;
 		}
 
-		// a blank line ends the section
-		if (line[ 0 ] == 0)
-		{
-			inConfigSection = false;
+		if (!g_strcmp0(file_name, DEFAULT_CONFIG)) {
+			// we parsed this file already
 			continue;
 		}
 
-		if (inConfigSection)
-		{
-			if (!ParseKeyValue(line, key, sizeof(key),
-				val, sizeof(val)))
-			{
-				ErrPrint("Config error on %s: Line %d: Failed to parse line\n",
-					kConfigFile, lineNum);
-				continue;
-			}
+		// Construct full path for parsing selected conf file
+		// Ex: /etc/pmlog.d/default.conf = /etc/pmlog.d + default.conf
+		full_path = g_build_filename(CONFIG_DIR, file_name, NULL);
 
-			if (!PrvReadConfigKey(gGlobalsP, key, val, errMsg, sizeof(errMsg)))
-			{
-				ErrPrint("Config error on %s: Line %d: Failed to parse: %s\n",
-					kConfigFile, lineNum, errMsg);
-				continue;
-			}
-		}
-		else
-		{
-			if (strcmp(line, kConfigSection) == 0)
-			{
-				gotConfigSection = true;
-				inConfigSection = true;
-				continue;
-			}
+		// execute caller supplied function
+		fn_ptr(full_path);
 
-			//ErrPrint("Config error on %s: Line %d: Unrecognized line\n",
-			//	kConfigFile, lineNum);
-			continue;
-		}
-	}
+		g_free(full_path);
+        }
 
-	if (!gotConfigSection)
-	{
-		//ErrPrint("Config error on %s: Section '%s' not defined\n",
-		//	kConfigFile, kConfigSection);
-	}
+	g_dir_close(dir);
 
-	(void) fclose(f);
-
-	//---------------------------------------------------
-
-	return true;
+	return found_default_conf;
 }
-
-
-//#######################################################################
-
 
 /*********************************************************************/
 /* kHexChars */
@@ -1199,7 +991,6 @@ static const char kHexChars[16] =
 	'8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
 };
 
-
 /*********************************************************************/
 /* init_function */
 /**
@@ -1210,16 +1001,16 @@ static void __attribute ((constructor)) init_function(void)
 {
 	const char* kPmLogLibSoFilePath = "@WEBOS_INSTALL_LIBDIR@/libPmLogLib.so";
 
-	int			err;
-	sem_t*		sem;
-	key_t		key;
-	int			shmid;
-	char*		data;
-	size_t		shmSize;
-	bool		needInit;
-	Dl_info		dlInfo;
-	int			result;
-	const char*	libFilePath;
+	int         err;
+	sem_t*      sem;
+	key_t       key;
+	int         shmid;
+	char*       data;
+	size_t      shmSize;
+	bool        needInit;
+	Dl_info     dlInfo;
+	int         result;
+	const char* libFilePath;
 	mode_t      mode;
 
 	// get/create the PmLogLib semaphore
@@ -1239,8 +1030,6 @@ static void __attribute ((constructor)) init_function(void)
 	}
 
 	gSem = sem;
-
-	//------------------------------------------------------------
 
 	// determine this library's file path dynamically
 	libFilePath = NULL;
@@ -1264,8 +1053,6 @@ static void __attribute ((constructor)) init_function(void)
 		libFilePath = kPmLogLibSoFilePath;
 	}
 
-	//------------------------------------------------------------
-
 	DbgPrint("getting shm key\n");
 
 	key = ftok(libFilePath, 'A');
@@ -1275,8 +1062,6 @@ static void __attribute ((constructor)) init_function(void)
 		ErrPrint("ftok error: %s\n", strerror(err));
 		return;
 	}
-
-	//------------------------------------------------------------
 
 	// lock the globals
 	PmLogPrvLock();
@@ -1317,7 +1102,6 @@ static void __attribute ((constructor)) init_function(void)
 	needInit = false;
 
 	// use header as initialization flag
-	//---------------------------------------------------------------
 	if (gGlobalsP->signature == 0)
 	{
 		DbgPrint("initializing shared mem\n");
@@ -1328,8 +1112,6 @@ static void __attribute ((constructor)) init_function(void)
 			sizeof(PmLogContext_);
 
 		gGlobalsP->numUserContexts = 0;
-
-		gGlobalsP->flags = 0;
 
 		gGlobalsP->consoleConf.stdErrMinLevel = kPmLogLevel_Emergency;
 		gGlobalsP->consoleConf.stdErrMaxLevel = kPmLogLevel_Error;
@@ -1344,24 +1126,16 @@ static void __attribute ((constructor)) init_function(void)
 
 		needInit = true;
 	}
-	//---------------------------------------------------------------
 	else if (gGlobalsP->signature == PMLOG_SIGNATURE)
 	{
 		DbgPrint("accessing shared mem\n");
 	}
-	//---------------------------------------------------------------
 	else
 	{
 		ErrPrint("unrecognized shared mem\n");
 
 		gGlobalsP = NULL;
 		gGlobalContextP = NULL;
-	}
-	//---------------------------------------------------------------
-
-	if (needInit)
-	{
-		(void) PrvReadGlobalConfig(gGlobalsP);
 	}
 
 	// release the globals lock
@@ -1370,7 +1144,7 @@ static void __attribute ((constructor)) init_function(void)
 	// initialize contexts if this is the first time
 	if (needInit)
 	{
-		(void) PrvInitContexts();
+		PmLogPrvReadConfigs(parse_json_file);
 	}
 }
 
@@ -2088,7 +1862,8 @@ static bool HandleLogLibCommand(const char* msg)
 	if (strcmp(msg, "loadconf") == 0)
 	{
 		DbgPrint("HandleLogLibCommand: re-loading global config\n");
-		(void) PrvReadGlobalConfig(gGlobalsP);
+		PmLogPrvReadConfigs(parse_json_file);
+
 		/* updating all context flags that preserved defaults */
 		logErr = PmLogGetNumContexts(&contextsNumber);
 		if (logErr != kPmLogErr_None)
@@ -2105,10 +1880,10 @@ static bool HandleLogLibCommand(const char* msg)
 				continue;
 			}
 			contextP = PrvResolveContext(context);
-			if ((contextP != NULL) && (gGlobalsP != NULL) &&
+			if ((contextP) && (gGlobalContextP) &&
 				!(contextP->info.flags & kPmLogFlag_Overridden))
 			{
-				contextP->info.flags = gGlobalsP->flags;
+				contextP->info.flags = gGlobalContextP->info.flags;
 			}
 		}
 		return true;
