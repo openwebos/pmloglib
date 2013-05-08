@@ -39,6 +39,7 @@ global:
 	PmLogStringToFacility;
 	PmLogGetErrDbgString;
 	PmLogString_;
+	_PmLogMsgKV;
 
 	### Private interface (PmLogLibPrv.h) ###
 	PmLogPrvGlobals;

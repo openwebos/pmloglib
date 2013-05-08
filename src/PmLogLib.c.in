@@ -2370,6 +2370,155 @@ PmLogErr PmLogPrint_(PmLogContext context, PmLogLevel level,
 	return logErr;
 }
 
+// ASCII start of heading seperator is used by macros in PmLogMsg.h
+#define SOH '\001'
+static bool validate_keys(size_t kv_count, const char *check_keywords,
+                          const char *context_name, const char *msgid)
+{
+	int current_key;
+
+	if (!check_keywords)
+		return false;
+
+	if (!kv_count) {
+		ErrPrint("MISSING_KV {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
+		         context_name, msgid);
+		return false;
+	}
+
+	for (current_key = 1; *check_keywords != '\0'; check_keywords++) {
+		char c = *check_keywords;
+
+		if (SOH == c) {
+			// keys are seperated by SOH
+			// (start of heading) ASCII char
+			current_key++;
+		} else if (c < ' ' || c >= 0x7f) {
+			ErrPrint("INVALID_KEY {\"CONTEXT\":\"%s\","
+			         "\"MSGID\":\"%s\",\"KEY\":%d,"
+			         "\"INVALID_CHAR\":\"%c\"}",
+			         context_name, msgid, current_key, c);
+			return false;
+		} else if ('\\' == c) {
+			if ('"' == check_keywords[1] || '\\' == check_keywords[1]) {
+				check_keywords++;
+			} else {
+				ErrPrint("INVALID_KEY {\"CONTEXT\":\"%s\","
+				         "\"MSGID\":\"%s\",\"KEY\":%d,"
+				         "\"INVALID_CHAR\":\"%c\"}",
+				         context_name, msgid, current_key,
+				         check_keywords[1]);
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+static bool validate_format(size_t kv_count, const char *format)
+{
+	size_t count = 0;
+
+	if (!format || !kv_count) {
+		return false;
+	}
+
+	while (*format) {
+		if ('%' == *format) {
+			if ('%' == *(format+1)) {
+				format++;
+			} else {
+				count++;
+			}
+		}
+		format++;
+	}
+
+	return (kv_count == count);
+}
+
+PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
+                     const char *msgid, size_t kv_count, const char *check_keywords,
+                     const char *check_formats, const char *check_free_text_fmt,
+                     const char *fmt, ...)
+{
+	PmLogContext_  *context_ptr;
+	PmLogErr       err;
+	va_list        args;
+	int            ret;
+	char           final_str[BUFFER_LEN];
+
+	context_ptr = PrvResolveContext(context);
+	if (!context_ptr) {
+		return kPmLogErr_InvalidContext;
+	}
+
+	err = PrvCheckContext(context_ptr, level);
+	if (kPmLogErr_None != err) {
+		return err;
+	}
+
+	if (kPmLogLevel_Debug != level) {
+		if (!msgid) {
+			ErrPrint("NULL_MSGID {\"CONTEXT\":\"%s\"}",
+			         context_ptr->component);
+			return kPmLogErr_InvalidMsgID;
+		}
+
+		if (kv_count) {
+			// make sure number of keys received matches with
+			// kv_count
+			if (!validate_keys(kv_count, check_keywords,
+			    context_ptr->component, msgid)) {
+				return kPmLogErr_InvalidFormat;
+			}
+
+			// check_formats should contain kv_count number of '%' chars
+			if (!validate_format(kv_count, check_formats)) {
+				ErrPrint("MISMATCHED_FMT {\"CONTEXT\":\"%s\","
+				         "\"MSGID\":\"%s\"}",
+				         context_ptr->component, msgid);
+				return kPmLogErr_InvalidFormat;
+			}
+		}
+	} else {
+		// for debug level, make sure msgid is NULL and no kv pairs
+
+		if (msgid) {
+			ErrPrint("DBGLVL_MSGID {\"CONTEXT\":\"%s\","
+			         "\"MSGID\":\"%s\"} %s",
+			         context_ptr->component, msgid,
+			         "MSGID should be NULL for debug level");
+			return kPmLogErr_InvalidFormat;
+		}
+
+		if (kv_count) {
+			ErrPrint("DBGLVL_KVCOUNT {\"CONTEXT\":\"%s\"} %s",
+			         context_ptr->component,
+			         "kv_count should be 0 for DEBUG level");
+			return kPmLogErr_InvalidFormat;
+		}
+	}
+
+	va_start(args, fmt);
+	ret = vsnprintf(final_str, sizeof(final_str), fmt, args);
+	va_end(args);
+
+	if (ret < 0) {
+		ErrPrint("VSNPRN_ERR {\"CONTEXT\":\"%s\","
+		         "\"MSGID\":\"%s\",\"ERR_STR\":\"%s\"}",
+		         context_ptr->component, msgid ? msgid : "NULL",
+		         strerror(errno));
+		return kPmLogErr_FormatStringFailed;
+	} else if (ret >= sizeof(final_str)) {
+		final_str[sizeof(final_str) - 1] = '\0';
+		DbgPrint("vsnprintf truncation for CONTEXT:%s, MSGID:%s",
+		         context_ptr->component, msgid ? msgid : "NULL");
+	}
+
+	return PrvLogWrite(context_ptr, level, msgid, final_str);
+}
 
 /*********************************************************************/
 /* PmLogVPrint_ */

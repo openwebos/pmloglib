@@ -88,6 +88,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "PmLogMsg.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -129,10 +130,7 @@ extern "C"
 /**
 @brief  Type definition for error codes returned by this module's APIs.
 **********************************************************************/
-
-//?? To Do: clean up and rename these to be more clear
-
-enum
+typedef enum
 {
 	kPmLogErr_None					= 0,
 	//------------------------------------------------
@@ -153,13 +151,7 @@ enum
 	kPmLogErr_InvalidMsgID			= PMLOG_ERR(15),
 	//------------------------------------------------
 	kPmLogErr_Unknown				= PMLOG_ERR(999)
-};
-
-typedef int32_t PmLogErr;
-
-
-//#####################################################################
-
+} PmLogErr;
 
 /*********************************************************************/
 /* PmLogLevel */
@@ -168,7 +160,7 @@ typedef int32_t PmLogErr;
 		The values are intentionally identical to the equivalent syslog
 		priority value.
 **********************************************************************/
-enum
+typedef enum
 {
 	kPmLogLevel_None		= -1,	/* no output */
 	kPmLogLevel_Emergency	= 0,	/* system is unusable */
@@ -179,10 +171,7 @@ enum
 	kPmLogLevel_Notice		= 5,	/* normal but significant condition */
 	kPmLogLevel_Info		= 6,	/* informational */
 	kPmLogLevel_Debug		= 7		/* debug-level messages */
-};
-
-typedef int PmLogLevel;
-
+} PmLogLevel;
 
 //#####################################################################
 
@@ -857,10 +846,143 @@ const char* PmLogGetErrDbgString(PmLogErr logErr);
 
 //#####################################################################
 
+/*********************************************************************/
+/* PMLOGKFV */
+/**
+@brief  This macro is used for building a key value pair, where value
+        is not a string literal. If value is a string literal then use
+	PMLOGKS macro instead.
+
+	Ex: PMLOGKFV("APP_ID", "%d", 99);
+
+@param  literal_key string containing the key
+@param  literal_fmt string specifying the format of the value
+@param  value value corresponding to the format type specifid in literal_fmt
+**********************************************************************/
+#define PMLOGKFV(literal_key, literal_fmt, value) \
+	literal_key, literal_fmt, value
+
+/*********************************************************************/
+/* PMLOGKS */
+/**
+@brief  This macro is used for building a key value pair, where value
+        is a string literal. Use PMLOGKFV macro in case, value is NOT a
+	string literal.
+
+	Ex: PMLOGKS("APP_NAME", "Calculator");
+
+@param  literal_key string containing the key
+@param  string_value string containing the value
+**********************************************************************/
+#define PMLOGKS(literal_key, string_value) \
+	literal_key, "\"%s\"", string_value
+
+/*********************************************************************/
+/* _PmLogMsgKV */
+/**
+@brief  Logs the specified key value pair(s) and formatted text,
+        tagged at given level, to the specified context.
+
+	Instead of using this API, use the wrappers like PmLogMsg(),
+	PmLogError() etc.
+
+@param  flags flags is used for identifying revision of this API and to
+	maintain backward compatibility
+**********************************************************************/
+extern PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level,
+		unsigned int flags, const char *msgid, size_t kv_count,
+		const char *check_keywords, const char *check_formats,
+		const char *check_free_text_fmt, const char *fmt, ...)
+__attribute__((format(printf, 9, 10)));
+
+/*********************************************************************/
+/* PmLogMsg */
+/**
+@brief  Logs the specified key value pair(s) and formatted text,
+        tagged at given level, to the specified context.
+
+	Ex: PmLogMsg(mycontext, Info, "APP_LAUNCHED", 1,
+	PMLOGKS("APP_NAME", "Calculator"), "");
+
+proto:	void PmLogMsg(PmLogContext context, PmLogLevel level,
+	const char *msgid, size_t kv_count, ...);
+
+@param  context context typically retrieved using PmLogGetContext()
+@param  level_suffix any of the level suffixes like Error, Warning etc.
+@param  msgid unique message id within this context for this message
+@param  kv_count number of key value pairs in this message
+@param  ... variable argument list containing, kv_count number of key
+		value pairs built using either PMLOGKS() or PMLOGKFV()
+		macros and at least an empty free string
+
+@return ::PmLogErr
+**********************************************************************/
+#define PmLogMsg(context, level_suffix, msgid, kv_count, ...)	\
+	(PmLogIsEnabled(context, kPmLogLevel_##level_suffix) \
+		? _PmLogMsgKV##kv_count(context, level_suffix, msgid, __VA_ARGS__) \
+		: kPmLogErr_LevelDisabled)
+
+/*********************************************************************/
+/* PmLogCritical */
+/**
+@brief  Logs the specified key value pair(s) and formatted text,
+        tagged as Critical level, to the specified context.
+
+proto:	void PmLogCritical(PmLogContext context, const char *msgid,
+		size_t kv_count, ...);
+**********************************************************************/
+#define	PmLogCritical(context, msgid, kv_count, ...) \
+		PmLogMsg(context, Critical, msgid, kv_count, __VA_ARGS__)
+
+/*********************************************************************/
+/* PmLogError */
+/**
+@brief  Logs the specified key value pair(s) and formatted text,
+        tagged as Error level, to the specified context.
+
+proto:	void PmLogError(PmLogContext context, const char *msgid,
+		size_t kv_count, ...);
+**********************************************************************/
+#define	PmLogError(context, msgid, kv_count, ...) \
+		PmLogMsg(context, Error, msgid, kv_count, __VA_ARGS__)
+
+/*********************************************************************/
+/* PmLogWarning */
+/**
+@brief  Logs the specified key value pair(s) and formatted text,
+        tagged as Warning level, to the specified context.
+
+proto:	void PmLogWarning(PmLogContext context, const char *msgid,
+		size_t kv_count, ...);
+**********************************************************************/
+#define	PmLogWarning(context, msgid, kv_count, ...) \
+		PmLogMsg(context, Warning, msgid, kv_count, __VA_ARGS__)
+
+/*********************************************************************/
+/* PmLogInfo */
+/**
+@brief  Logs the specified key value pair(s) and formatted text,
+        tagged as Info level, to the specified context.
+
+proto:	void PmLogInfo(PmLogContext context, const char *msgid,
+		size_t kv_count, ...);
+**********************************************************************/
+#define	PmLogInfo(context, msgid, kv_count, ...) \
+		PmLogMsg(context, Info, msgid, kv_count, __VA_ARGS__)
+
+/*********************************************************************/
+/* PmLogDebug */
+/**
+@brief  Logs the specified formatted text, tagged as Debug level,
+        to the specified context.
+
+proto:	void PmLogDebug(PmLogContext context, ...);
+**********************************************************************/
+#define	PmLogDebug(context, ...) \
+		PmLogMsg(context, Debug, NULL, 0, __VA_ARGS__)
 
 #ifdef __cplusplus
 }
 #endif	
-
 
 #endif // PMLOGLIB_H
