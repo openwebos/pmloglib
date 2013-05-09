@@ -150,6 +150,7 @@ enum
 	kPmLogErr_InvalidContextName	= PMLOG_ERR(12),
 	kPmLogErr_ContextNotFound		= PMLOG_ERR(13),
 	kPmLogErr_BufferTooSmall		= PMLOG_ERR(14),
+	kPmLogErr_InvalidMsgID			= PMLOG_ERR(15),
 	//------------------------------------------------
 	kPmLogErr_Unknown				= PMLOG_ERR(999)
 };
@@ -384,6 +385,54 @@ proto:	bool PmLogIsEnabled(PmLogContext context, PmLogLevel level);
 
 
 //#####################################################################
+
+
+/*********************************************************************/
+/* PmLogString */
+/**
+
+@brief  Logs the specified formatted key-value pairs and free text
+        to the specified context.
+
+        This API should be used by apps and nodejs services to log
+        JSON stringified key-value pairs and free text
+
+@param  context context typically retrieved using PmLogGetContext()
+@param  level any of the kPmLogLevel_Info, kPmLogLevel_Warning etc.
+@param  msgid unique message id within this context for this message
+@param  kvpairs JSON stringified key-value pairs
+@param  message free text
+
+@return Error code:
+                        kPmLogErr_None
+                        kPmLogErr_InvalidContext
+                        kPmLogErr_InvalidLevel
+                        kPmLogErr_InvalidFormat
+                        kPmLogErr_InvalidMsgID
+**********************************************************************/
+#define PmLogString(context, level, msgid, kvpairs, message) \
+        (PmLogIsEnabled(context, level) \
+                ? PmLogString_(context, level, msgid, kvpairs, message) \
+                : kPmLogErr_LevelDisabled)
+
+
+/*********************************************************************/
+/* PmLogString_ */
+/**
+
+@brief  Logs the specified formatted key-value pairs and free text
+        to the specified context. This should not be called directly,
+        instead the wrapper PmLogString should be called.
+
+@return Error code:
+                        kPmLogErr_None
+                        kPmLogErr_InvalidContext
+                        kPmLogErr_InvalidLevel
+                        kPmLogErr_InvalidFormat
+                        kPmLogErr_InvalidMsgID
+**********************************************************************/
+PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
+                const char* msgid, const char* kvpairs, const char* message);
 
 
 /*********************************************************************/

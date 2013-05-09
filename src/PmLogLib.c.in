@@ -59,13 +59,14 @@ pid_t gettid(void)
 /***********************************************************************
  * COMPONENT_PREFIX
  ***********************************************************************/
-#define COMPONENT_PREFIX	"PmLogLib: "
+#define COMPONENT_PREFIX	"PmLogLib "
 
 #define LOG_PROCESS_IDS_TAG "LogProcessIds"
 #define LOG_THREAD_IDS_TAG  "LogThreadIds"
 #define LOG_TO_CONSOLE_TAG  "LogToConsole"
 
 #define kConfigFile "@WEBOS_INSTALL_SYSCONFDIR@/PmLog/PmLogContexts.conf"
+#define BUFFER_LEN 1024
 
 // don't check in with this on!
 //#define DEBUG_ENABLED
@@ -2116,21 +2117,22 @@ static bool HandleLogLibCommand(const char* msg)
 	return false;
 }
 
-
 /*********************************************************************/
 /* PrvLogWrite */
 /**
 @brief  Logs the specified formatted text to the specified context.
 **********************************************************************/
-static PmLogErr PrvLogWrite(PmLogContext_* contextP, PmLogLevel level,
-	const char* s)
+static PmLogErr PrvLogWrite(PmLogContext_ *contextP, PmLogLevel level,
+		const char *msgid, const char *s)
 {
-	const char*	identStr;
+	const char	*identStr;
 	pid_t		pid;
 	pid_t		tid;
 	char		ptidStr[ 32 ];
-	int			savedErrNo;
-	char		componentStr[ 1 + PMLOG_MAX_CONTEXT_NAME_LEN + 3 +1 ]; // one character before, 3 after, \0 terminator
+	int		savedErrNo;
+
+	// one character before, 3 after, \0 terminator
+	char		componentStr[ 1 + PMLOG_MAX_CONTEXT_NAME_LEN + 3 +1 ];
 
 	// save and restore errno, so logging doesn't have side effects
 	savedErrNo = errno;
@@ -2150,12 +2152,12 @@ static PmLogErr PrvLogWrite(PmLogContext_* contextP, PmLogLevel level,
 		if (contextP->info.flags & kPmLogFlag_LogThreadIds &&
 			(tid != pid))
 		{
-			mysprintf(ptidStr, sizeof(ptidStr), "[%d:%d]: ", (int) pid,
+			mysprintf(ptidStr, sizeof(ptidStr), "[%d:%d]", (int) pid,
 				(int) tid);
 		}
 		else
 		{
-			mysprintf(ptidStr, sizeof(ptidStr), "[%d]: ", (int) pid);
+			mysprintf(ptidStr, sizeof(ptidStr), "[%d]", (int) pid);
 		}
 	}
 	else
@@ -2169,11 +2171,18 @@ static PmLogErr PrvLogWrite(PmLogContext_* contextP, PmLogLevel level,
 	}
 	else
 	{
-		mysprintf(componentStr, sizeof(componentStr), "{%s}: ",
+		mysprintf(componentStr, sizeof(componentStr), "%s",
 			contextP->component);
 	}
 
-	syslog(level, "%s%s%s", ptidStr, componentStr, s);
+	if (msgid)
+	{
+		syslog(level, "%s %s %s %s", ptidStr, componentStr, msgid, s);
+	}
+	else
+	{
+		syslog(level, "%s %s %s", ptidStr, componentStr, s);
+	}
 
 	if (contextP->info.flags & kPmLogFlag_LogToConsole)
 	{
@@ -2204,6 +2213,89 @@ Exit:
 	return kPmLogErr_None;
 }
 
+/*********************************************************************/
+/* PmLogString_ */
+/**
+@brief  Logs the specified string of kv pairs and free text to the
+        specified context.
+**********************************************************************/
+PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
+		const char* msgid, const char* kvpairs, const char* message)
+{
+	PmLogContext_*  contextP;
+	PmLogErr logErr;
+	char lineStr[BUFFER_LEN];
+	int ret, err;
+
+	contextP = PrvResolveContext(context);
+	if (!contextP) {
+		return kPmLogErr_InvalidContext;
+	}
+
+	logErr = PrvCheckContext(contextP, level);
+	if (logErr != kPmLogErr_None) {
+		return logErr;
+	}
+
+	if (level != kPmLogLevel_Debug) {
+		if (!msgid) {
+	                ErrPrint("NULL_MSGID {\"CONTEXT\":\"%s\"}",
+					contextP->component);
+			return kPmLogErr_InvalidMsgID;
+		}
+
+		if (!kvpairs) {
+			if (!message) { //both kvpairs and message is NULL
+				return PrvLogWrite(contextP, level, msgid, "");
+			} else {	//only kvpair is null
+				return PrvLogWrite(contextP, level, msgid, message);
+			}
+		} else {
+			if (!message) { //only message is null
+				return PrvLogWrite(contextP, level, msgid, kvpairs);
+			} else {	//both kvpairs and message are not null
+
+				ret = snprintf(lineStr, sizeof(lineStr), "%s %s", kvpairs, message);
+				if (ret < 0) {
+					err = errno;
+				        ErrPrint("SNPRINTF_ERR {\"CONTEXT\":\"%s\", \"MSGID\":\"%s\",\"ERROR\":\"%s\"}",
+						contextP->component, msgid, strerror(err));
+					return kPmLogErr_FormatStringFailed;
+				} else {
+			                if (ret >= sizeof(lineStr)) {
+						DbgPrint("snprintf truncation\n");
+						lineStr[ sizeof(lineStr) - 1 ] = '\0';
+			                }
+					return PrvLogWrite(contextP, level, msgid, lineStr);
+				}
+			}
+		}
+	} else { //debug level
+
+		if (msgid) {
+			ErrPrint("DBGLVL_MSGID {\"CONTEXT\":\"%s\","
+				"\"MSGID\":\"%s\"} %s",
+				contextP->component, msgid,
+				"MSGID should be NULL for debug level");
+			return kPmLogErr_InvalidFormat;
+		}
+
+		if (kvpairs) {
+			ErrPrint("DBGLVL_KVPAIRS {\"CONTEXT\":\"%s\"} %s",
+				contextP->component,
+				"kvpairs should be NULL for DEBUG level");
+			return kPmLogErr_InvalidFormat;
+		}
+
+		if(!message) {
+			ErrPrint("INVALID_FREESTRING {\"CONTEXT\":\"%s\"}",
+					contextP->component);
+			return kPmLogErr_InvalidFormat;
+		}
+
+		return PrvLogWrite(contextP, level, msgid, message);
+	}
+}
 
 /*********************************************************************/
 /* PrvLogVPrint */
@@ -2213,10 +2305,8 @@ Exit:
 static PmLogErr PrvLogVPrint(PmLogContext_* contextP, PmLogLevel level,
 	const char* fmt, va_list args)
 {
-	const size_t kLineBuffSize = 1024;
-
 	PmLogErr		logErr;
-	char			lineStr[ kLineBuffSize ];
+	char			lineStr[BUFFER_LEN];
 	int				n;
 	int				err;
 
@@ -2240,7 +2330,7 @@ static PmLogErr PrvLogVPrint(PmLogContext_* contextP, PmLogLevel level,
 			lineStr[ sizeof(lineStr) - 1 ] = 0;
 		}
 
-		logErr = PrvLogWrite(contextP, level, lineStr);
+		logErr = PrvLogWrite(contextP, level, NULL, lineStr);
 	}
 
 	return logErr;
@@ -2409,7 +2499,7 @@ static PmLogErr DumpData_OffsetHexAscii(PmLogContext_* contextP,
 		assert((lineBytes < kMaxBytesPerLine) || ((lineP - lineBuff) == (ptrdiff_t) kMaxLineLen));
 		*lineP = 0;
 
-		logErr = PrvLogWrite(contextP, level, lineBuff);
+		logErr = PrvLogWrite(contextP, level, NULL, lineBuff);
 		if (logErr != kPmLogErr_None)
 		{
 			break;
@@ -2504,6 +2594,7 @@ const char* PmLogGetErrDbgString(PmLogErr logErr)
 		/*  12 */ DEFINE_ERR_STR( InvalidContextName );
 		/*  13 */ DEFINE_ERR_STR( ContextNotFound );
 		/*  14 */ DEFINE_ERR_STR( BufferTooSmall );
+		/*  15 */ DEFINE_ERR_STR( InvalidMsgID );
 		//---------------------------------------------
 		/* 999 */ DEFINE_ERR_STR( Unknown );
 	}
