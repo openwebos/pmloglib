@@ -13,6 +13,8 @@ Below are the tools (and their minimum versions) required to build _PmLogLib_:
 
 - cmake (version required by openwebos/cmake-modules-webos)
 - gcc 4.6.3
+- glib-2.0 2.32.4
+- openwebos/libpbnjson 1.3.0
 - make (any version)
 - openwebos/cmake-modules-webos 1.0.0 RC3
 - pkg-config 0.26

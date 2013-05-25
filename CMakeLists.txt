@@ -59,7 +59,7 @@ webos_add_linker_options(ALL --version-script=${CMAKE_SOURCE_DIR}/src/PmLogLibEx
 webos_add_linker_options(ALL --no-undefined)
 
 webos_configure_source_files(SOURCE_FILES src/PmLogLib.c)
-webos_configure_header_files(include/public)
+webos_configure_header_files(include/public INSTALL)
 add_library(PmLogLib SHARED ${SOURCE_FILES})
 target_link_libraries(PmLogLib ${GLIB2_LDFLAGS} ${PBNJSON_C_LDFLAGS} dl pthread)
 webos_build_library()
