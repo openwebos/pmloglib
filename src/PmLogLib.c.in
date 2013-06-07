@@ -72,6 +72,7 @@ pid_t gettid(void)
 
 #define BUFFER_LEN 1024
 #define CONFIG_DIR "@WEBOS_INSTALL_SYSCONFDIR@/pmlog.d"
+#define LEGACY_LOG "legacy-log"
 
 // don't check in with this on!
 //#define DEBUG_ENABLED
@@ -2121,10 +2122,17 @@ PmLogErr PmLogPrint_(PmLogContext context, PmLogLevel level,
 	const char* fmt, ...)
 {
 	PmLogContext_*	contextP;
-	PmLogErr		logErr;
-	va_list 		args;
+	PmLogErr	logErr;
+	va_list 	args;
 
-	contextP = PrvResolveContext(context);
+	PmLogContext forced_context = context;
+	logErr = PmLogGetContext(LEGACY_LOG, &forced_context);
+	if (logErr != kPmLogErr_None) {
+		forced_context = context;
+		ErrPrint("%s: PmLogGetContext err %d", __func__, logErr);
+	}
+
+	contextP = PrvResolveContext(forced_context);
 	if (contextP == NULL)
 	{
 		return kPmLogErr_InvalidContext;
@@ -2314,9 +2322,16 @@ PmLogErr PmLogVPrint_(PmLogContext context, PmLogLevel level,
 	const char* fmt, va_list args)
 {
 	PmLogContext_*	contextP;
-	PmLogErr		logErr;
+	PmLogErr	logErr;
 
-	contextP = PrvResolveContext(context);
+        PmLogContext forced_context = context;
+        logErr = PmLogGetContext(LEGACY_LOG, &forced_context);
+        if (logErr != kPmLogErr_None) {
+                forced_context = context;
+                ErrPrint("%s: PmLogGetContext err %d", __func__, logErr);
+        }
+
+        contextP = PrvResolveContext(forced_context);
 	if (contextP == NULL)
 	{
 		return kPmLogErr_InvalidContext;

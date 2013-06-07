@@ -62,11 +62,11 @@
  *	{
  * 		int err;
  *
- *		PmLogPrintDebug(gMyContext, "Calling Foo");
+ *		PmLogDebug(gMyContext, "Calling Foo");
  * 		err = Foo();
  * 		if (err)
  * 		{
- *			PmLogPrintError(gMyContext, "Foo error %d", err);
+ *			PmLogError(gMyContext, "FOOERR", 1, PMLOGKFV(ERROR_CODE,"%d",err), "");
  * 		}
  * 	}
  * @endcode
@@ -428,7 +428,6 @@ proto:	bool PmLogIsEnabled(PmLogContext context, PmLogLevel level);
 PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
                 const char* msgid, const char* kvpairs, const char* message);
 
-
 /*********************************************************************/
 /* PmLogPrint_ */
 /**
@@ -444,9 +443,11 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
 			kPmLogErr_InvalidLevel
 			kPmLogErr_InvalidFormat
 **********************************************************************/
+
 PmLogErr PmLogPrint_(PmLogContext context, PmLogLevel level,
 	const char* fmt, ...)
-     __attribute__((format(printf, 3, 4)));
+     __attribute__((format(printf, 3, 4)))
+     __attribute__ ((deprecated));
 
 
 /*********************************************************************/
@@ -542,7 +543,7 @@ proto:	void PmLogPrintDebug(PmLogContext context,
 			kPmLogErr_InvalidFormat
 **********************************************************************/
 PmLogErr PmLogVPrint_(PmLogContext context, PmLogLevel level,
-	const char* fmt, va_list args);
+	const char* fmt, va_list args) __attribute__ ((deprecated));
 
 
 /*********************************************************************/

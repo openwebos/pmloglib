@@ -10,6 +10,16 @@
 				{"filter" : "*.*", "output" : "stdlog"},
 				{"filter" : "kern.!info", "output" : "-stdlog"}
 			]
+		},
+	        {
+			"name" : "legacy-log",
+			"level" : "debug",
+			"logProcessIds" : false,
+			"logThreadIds" : false,
+			"logToConsole" : false,
+			"rules" : [
+				{"filter" : "*.*", "output" : "legacy-log"}
+			]
 		}
 	],
 
@@ -17,6 +27,12 @@
 		{
 			"name" : "stdlog",
 			"file" : "@WEBOS_INSTALL_LOGDIR@/messages",
+			"maxSize" : 2000,
+			"rotations" : 5
+		},
+		{
+			"name" : "legacy-log",
+			"file" : "@WEBOS_INSTALL_LOGDIR@/legacy-log",
 			"maxSize" : 2000,
 			"rotations" : 5
 		}
