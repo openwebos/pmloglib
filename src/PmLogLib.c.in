@@ -72,7 +72,6 @@ pid_t gettid(void)
 
 #define BUFFER_LEN 1024
 #define CONFIG_DIR "@WEBOS_INSTALL_SYSCONFDIR@/pmlog.d"
-#define LEGACY_LOG "legacy-log"
 
 // don't check in with this on!
 //#define DEBUG_ENABLED
@@ -1901,11 +1900,11 @@ static bool HandleLogLibCommand(const char* msg)
 static PmLogErr PrvLogWrite(PmLogContext_ *contextP, PmLogLevel level,
 		const char *msgid, const char *s)
 {
-	const char	*identStr;
-	pid_t		pid;
-	pid_t		tid;
-	char		ptidStr[ 32 ];
-	int		savedErrNo;
+	const char  *identStr;
+	pid_t       pid;
+	pid_t       tid;
+	char        ptidStr[ 32 ];
+	int         savedErrNo;
 
 	// one character before, 3 after, \0 terminator
 	char		componentStr[ 1 + PMLOG_MAX_CONTEXT_NAME_LEN + 3 +1 ];
@@ -1953,11 +1952,11 @@ static PmLogErr PrvLogWrite(PmLogContext_ *contextP, PmLogLevel level,
 
 	if (msgid)
 	{
-		syslog(level, "%s %s %s %s", ptidStr, componentStr, msgid, s);
+		syslog(level, "%s %s %s %s %s", ptidStr, PMLOG_IDENTIFIER, componentStr, msgid, s);
 	}
 	else
 	{
-		syslog(level, "%s %s %s", ptidStr, componentStr, s);
+		syslog(level, "%s %s %s %s", ptidStr, PMLOG_IDENTIFIER, componentStr, s);
 	}
 
 	if (contextP->info.flags & kPmLogFlag_LogToConsole)

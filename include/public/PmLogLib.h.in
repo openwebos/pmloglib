@@ -125,6 +125,9 @@ extern "C"
 // This should really come from a common Palm header somewhere.
 #define PMLOG_ERR(offset)	(0x6C670000 | offset)
 
+// This is a context name which is used for the others's log messages.
+#define LEGACY_LOG "legacy-log"
+
 
 /*********************************************************************/
 /* PmLogErr */
@@ -233,6 +236,15 @@ typedef const PmLogContextInfo* PmLogContext;
 #define kPmLogDefaultContextName "<default>"
 // For backward compatibility
 #define kPmLogGlobalContextName kPmLogDefaultContextName
+
+
+/*********************************************************************/
+/* PMLOG_IDENTIFIER */
+/**
+@brief  This is a identifier to distingish whether the log from
+        pmloglib or not.
+**********************************************************************/
+#define PMLOG_IDENTIFIER "[pmlog]"
 
 
 /*********************************************************************/
