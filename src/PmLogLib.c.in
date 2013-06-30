@@ -191,6 +191,49 @@ static void PrintAppendToFile(const char* filePath, const char* fmt, ...)
 
 //#######################################################################
 
+/*********************************************************************
+ * validate_msgid
+ *
+ * Ensure that a provided MSGID meets the following constraints:
+ *   The pointer is non-NULL
+ *   It is not an empty string
+ *   It does not contain a space, '{' or '}'
+ *
+ * It also restricts the msgid to the length of the output buffer.
+ *
+ * Returns kPmLogErr_none on success, else kPmLogErr_InvalidMsgID
+ *
+ *********************************************************************/
+static PmLogErr validate_msgid(const char *msgid, char final_msgid[], PmLogContext_ *context_ptr)
+{
+	const char *ptrIndex;
+
+    final_msgid[0] = '\0'; // ensure output is always a C string
+
+    if (NULL == msgid) {
+        ErrPrint("NULL_MSGID {\"CONTEXT\":\"%s\"} %s",
+            context_ptr->component, "NULL MSGID provided for non-debug log");
+        return kPmLogErr_InvalidMsgID;
+    }
+
+    if (strlen(msgid) == 0) {
+        ErrPrint("EMPTY_MSGID {\"CONTEXT\":\"%s\"} %s",
+            context_ptr->component, "MSGID is empty");
+        return kPmLogErr_InvalidMsgID;
+    }
+
+    // Check each character in msgid against our list of invalid ones.
+    for (ptrIndex = msgid; *ptrIndex != '\0'; ++ptrIndex) {
+        if (strchr(" {}", *ptrIndex) != NULL) {
+            ErrPrint("INVALID_MSGID {\"CONTEXT\":\"%s\", \"MSGID\":\"%s\"} msgid contains space, { or }.",
+                     context_ptr->component, msgid);
+            return kPmLogErr_InvalidMsgID;
+        }
+	}
+
+	snprintf(final_msgid, sizeof(final_msgid), "%s", msgid);
+	return kPmLogErr_None;
+}
 
 /***********************************************************************
  * mystrcpy
@@ -2024,6 +2067,7 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
 	PmLogErr logErr;
 	char lineStr[BUFFER_LEN];
 	int ret, err;
+	char final_msgid[32] = {0,};
 
 	contextP = PrvResolveContext(context);
 	if (!contextP) {
@@ -2036,35 +2080,35 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
 	}
 
 	if (level != kPmLogLevel_Debug) {
-		if (!msgid) {
-	                ErrPrint("NULL_MSGID {\"CONTEXT\":\"%s\"}",
-					contextP->component);
-			return kPmLogErr_InvalidMsgID;
-		}
+
+        logErr = validate_msgid(msgid, final_msgid, contextP);
+        if (logErr != kPmLogErr_None) {
+            return logErr;
+        }
 
 		if (!kvpairs) {
 			if (!message) { //both kvpairs and message is NULL
-				return PrvLogWrite(contextP, level, msgid, "");
+				return PrvLogWrite(contextP, level, final_msgid, "");
 			} else {	//only kvpair is null
-				return PrvLogWrite(contextP, level, msgid, message);
+				return PrvLogWrite(contextP, level, final_msgid, message);
 			}
 		} else {
 			if (!message) { //only message is null
-				return PrvLogWrite(contextP, level, msgid, kvpairs);
+				return PrvLogWrite(contextP, level, final_msgid, kvpairs);
 			} else {	//both kvpairs and message are not null
 
 				ret = snprintf(lineStr, sizeof(lineStr), "%s %s", kvpairs, message);
 				if (ret < 0) {
 					err = errno;
 				        ErrPrint("SNPRINTF_ERR {\"CONTEXT\":\"%s\", \"MSGID\":\"%s\",\"ERROR\":\"%s\"}",
-						contextP->component, msgid, strerror(err));
+						contextP->component, final_msgid, strerror(err));
 					return kPmLogErr_FormatStringFailed;
 				} else {
 			                if (ret >= sizeof(lineStr)) {
 						DbgPrint("snprintf truncation\n");
 						lineStr[ sizeof(lineStr) - 1 ] = '\0';
 			                }
-					return PrvLogWrite(contextP, level, msgid, lineStr);
+					return PrvLogWrite(contextP, level, final_msgid, lineStr);
 				}
 			}
 		}
@@ -2253,6 +2297,7 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 	va_list        args;
 	int            ret;
 	char           final_str[BUFFER_LEN];
+	char           final_msgid[32] = {0,};
 
 	context_ptr = PrvResolveContext(context);
 	if (!context_ptr) {
@@ -2265,17 +2310,17 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 	}
 
 	if (kPmLogLevel_Debug != level) {
-		if (!msgid) {
-			ErrPrint("NULL_MSGID {\"CONTEXT\":\"%s\"}",
-			         context_ptr->component);
-			return kPmLogErr_InvalidMsgID;
-		}
+
+        err = validate_msgid(msgid, final_msgid, context_ptr);
+        if (err != kPmLogErr_None) {
+            return err;
+        }
 
 		if (kv_count) {
 			// make sure number of keys received matches with
 			// kv_count
 			if (!validate_keys(kv_count, check_keywords,
-			    context_ptr->component, msgid)) {
+			    context_ptr->component, final_msgid)) {
 				return kPmLogErr_InvalidFormat;
 			}
 
@@ -2283,7 +2328,7 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 			if (!validate_format(kv_count, check_formats)) {
 				ErrPrint("MISMATCHED_FMT {\"CONTEXT\":\"%s\","
 				         "\"MSGID\":\"%s\"}",
-				         context_ptr->component, msgid);
+				         context_ptr->component, final_msgid);
 				return kPmLogErr_InvalidFormat;
 			}
 		}
@@ -2313,16 +2358,16 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 	if (ret < 0) {
 		ErrPrint("VSNPRN_ERR {\"CONTEXT\":\"%s\","
 		         "\"MSGID\":\"%s\",\"ERR_STR\":\"%s\"}",
-		         context_ptr->component, msgid ? msgid : "NULL",
+		         context_ptr->component, msgid ? final_msgid : "NULL",
 		         strerror(errno));
 		return kPmLogErr_FormatStringFailed;
 	} else if (ret >= sizeof(final_str)) {
 		final_str[sizeof(final_str) - 1] = '\0';
 		DbgPrint("vsnprintf truncation for CONTEXT:%s, MSGID:%s",
-		         context_ptr->component, msgid ? msgid : "NULL");
+		         context_ptr->component, msgid ? final_msgid : "NULL");
 	}
 
-	return PrvLogWrite(context_ptr, level, msgid, final_str);
+	return PrvLogWrite(context_ptr, level, msgid ? final_msgid : NULL, final_str);
 }
 
 /*********************************************************************/
