@@ -436,6 +436,15 @@ const int* PrvLabelToInt(const IntLabel* labels, const char* s)
  *
  * Define string labels for the supported logging levels.
  ***********************************************************************/
+/*
+ * Disable 'deprecatd declaration' warning around this table. We are the
+ * ones who deprecated the Emergency, Alert, and Notice levels, but they
+ * still need to be in this table.
+ */
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 static const IntLabel kLogLevelLabels[] =
 {
 	// use the same labels as the syslog standards
@@ -453,6 +462,7 @@ static const IntLabel kLogLevelLabels[] =
 	{ NULL,			0 }
 };
 
+#pragma GCC diagnostic pop
 
 /***********************************************************************
  * PmLogLevelToString
@@ -1113,10 +1123,17 @@ static void __attribute ((constructor)) init_function(void)
 
 		gGlobalsP->numUserContexts = 0;
 
+/*
+ * Temporarily suppress the deprecation warnings for this block, as we
+ * are the deprecators
+ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 		gGlobalsP->consoleConf.stdErrMinLevel = kPmLogLevel_Emergency;
 		gGlobalsP->consoleConf.stdErrMaxLevel = kPmLogLevel_Error;
 		gGlobalsP->consoleConf.stdOutMinLevel = kPmLogLevel_Warning;
 		gGlobalsP->consoleConf.stdOutMaxLevel = kPmLogLevel_Debug;
+#pragma GCC diagnostic pop
 
 		mystrcpy(gGlobalContextP->component,
 			sizeof(gGlobalContextP->component), kPmLogGlobalContextName);
@@ -1279,9 +1296,16 @@ static inline PmLogContext PrvExportContext(const PmLogContext_* contextP)
 **********************************************************************/
 static inline bool PrvIsValidLevel(PmLogLevel level)
 {
+/*
+ * Temporarily suppress the deprecation warnings for this block, as we
+ * are the deprecators
+ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 	return
 		(level >= kPmLogLevel_Emergency) &&
 		(level <= kPmLogLevel_Debug);
+#pragma GCC diagnostic pop
 }
 
 

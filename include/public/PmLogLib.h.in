@@ -177,6 +177,11 @@ typedef enum
 	kPmLogLevel_Debug		= 7		/* debug-level messages */
 } PmLogLevel;
 
+typedef __attribute__((deprecated)) PmLogLevel PmLogLevel_deprecated;
+#define kPmLogLevel_Emergency ((PmLogLevel_deprecated) kPmLogLevel_Emergency)
+#define kPmLogLevel_Alert ((PmLogLevel_deprecated) kPmLogLevel_Alert)
+#define kPmLogLevel_Notice ((PmLogLevel_deprecated) kPmLogLevel_Notice)
+
 //#####################################################################
 
 
