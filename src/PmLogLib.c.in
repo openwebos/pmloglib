@@ -357,8 +357,8 @@ static void mysprintf(char* dst, size_t dstSize, const char* fmt, ...)
  ***********************************************************************/
 static void mysprintf(char* dst, size_t dstSize, const char* fmt, ...)
 {
-	va_list 		args;
-	int				n;
+	va_list	args;
+	int     n;
 
 	if (dst == NULL)
 	{
@@ -386,7 +386,6 @@ static void mysprintf(char* dst, size_t dstSize, const char* fmt, ...)
 	if (n >= dstSize)
 	{
 		ErrPrint("mysprintf buffer overflow\n");
-		dst[ dstSize - 1 ] = 0;
 	}
 
 	va_end(args);
@@ -2106,7 +2105,6 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
 				} else {
 			                if (ret >= sizeof(lineStr)) {
 						DbgPrint("snprintf truncation\n");
-						lineStr[ sizeof(lineStr) - 1 ] = '\0';
 			                }
 					return PrvLogWrite(contextP, level, final_msgid, lineStr);
 				}
@@ -2147,10 +2145,10 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
 static PmLogErr PrvLogVPrint(PmLogContext_* contextP, PmLogLevel level,
 	const char* fmt, va_list args)
 {
-	PmLogErr		logErr;
-	char			lineStr[BUFFER_LEN];
-	int				n;
-	int				err;
+	PmLogErr logErr;
+	char     lineStr[BUFFER_LEN];
+	int      n;
+	int      err;
 
 	if ((fmt == NULL) || (fmt[0] == 0))
 	{
@@ -2169,7 +2167,6 @@ static PmLogErr PrvLogVPrint(PmLogContext_* contextP, PmLogLevel level,
 		if (n >= sizeof(lineStr))
 		{
 			DbgPrint("vsnprintf truncation\n");
-			lineStr[ sizeof(lineStr) - 1 ] = 0;
 		}
 
 		logErr = PrvLogWrite(contextP, level, NULL, lineStr);
@@ -2362,7 +2359,6 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 		         strerror(errno));
 		return kPmLogErr_FormatStringFailed;
 	} else if (ret >= sizeof(final_str)) {
-		final_str[sizeof(final_str) - 1] = '\0';
 		DbgPrint("vsnprintf truncation for CONTEXT:%s, MSGID:%s",
 		         context_ptr->component, msgid ? final_msgid : "NULL");
 	}
