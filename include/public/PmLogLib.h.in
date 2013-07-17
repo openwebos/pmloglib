@@ -786,7 +786,7 @@ proto:	void PmLogDumpDataDebug(PmLogContext context,
 	#endif
 
 	#define	PMLOG_TRACE(...)	\
-		(void) PmLogPrint(PMLOG_TRACE_CONTEXT, kPmLogLevel_Debug, __VA_ARGS__)
+		PmLogDebug(PMLOG_TRACE_CONTEXT, __VA_ARGS__)
 
 	#define	PMLOG_TRACE_DATA(p, n)	\
 		(void) PmLogDumpData(PMLOG_TRACE_CONTEXT, kPmLogLevel_Debug, p, n, \
@@ -798,7 +798,6 @@ proto:	void PmLogDumpDataDebug(PmLogContext context,
 	#define	PMLOG_TRACE_DATA(p, n)
 
 #endif
-
 
 //#####################################################################
 
