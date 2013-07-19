@@ -22,14 +22,13 @@
         ctx, kPmLogLevel_##level_suffix, 0, msgid, 0, \
         NULL, \
         NULL, \
-        free_text_fmt, free_text_fmt, ## __VA_ARGS__)
+        "{} " free_text_fmt, ## __VA_ARGS__)
 
 #define _PmLogMsgKV1(ctx, level_suffix, msgid, k1, f1, v1, free_text_fmt, ...) \
     _PmLogMsgKV( \
         ctx, kPmLogLevel_##level_suffix, 0, msgid, 1, \
         k1, \
         f1, \
-        free_text_fmt, \
         "{"  "\"" k1 "\":" f1 "} " free_text_fmt, \
         v1, ## __VA_ARGS__)
 
@@ -38,7 +37,6 @@
         ctx, kPmLogLevel_##level_suffix, 0, msgid, 2, \
         k1 "\001" k2, \
         f1 "\001" f2, \
-        free_text_fmt, \
         "{"  "\"" k1 "\":" f1 ","  "\"" k2 "\":" f2 "} " free_text_fmt, \
         v1, v2, ## __VA_ARGS__)
 
@@ -47,7 +45,6 @@
         ctx, kPmLogLevel_##level_suffix, 0, msgid, 3, \
         k1 "\001" k2 "\001" k3, \
         f1 "\001" f2 "\001" f3, \
-        free_text_fmt, \
         "{"  "\"" k1 "\":" f1 ","  "\"" k2 "\":" f2 ","  "\"" k3 "\":" f3 "} " free_text_fmt, \
         v1, v2, v3, ## __VA_ARGS__)
 
@@ -56,7 +53,6 @@
         ctx, kPmLogLevel_##level_suffix, 0, msgid, 4, \
         k1 "\001" k2 "\001" k3 "\001" k4, \
         f1 "\001" f2 "\001" f3 "\001" f4, \
-        free_text_fmt, \
         "{"  "\"" k1 "\":" f1 ","  "\"" k2 "\":" f2 ","  "\"" k3 "\":" f3 ","  "\"" k4 "\":" f4 "} " free_text_fmt, \
         v1, v2, v3, v4, ## __VA_ARGS__)
 
@@ -65,7 +61,6 @@
         ctx, kPmLogLevel_##level_suffix, 0, msgid, 5, \
         k1 "\001" k2 "\001" k3 "\001" k4 "\001" k5, \
         f1 "\001" f2 "\001" f3 "\001" f4 "\001" f5, \
-        free_text_fmt, \
         "{"  "\"" k1 "\":" f1 ","  "\"" k2 "\":" f2 ","  "\"" k3 "\":" f3 ","  "\"" k4 "\":" f4 ","  "\"" k5 "\":" f5 "} " free_text_fmt, \
         v1, v2, v3, v4, v5, ## __VA_ARGS__)
 
@@ -74,7 +69,6 @@
         ctx, kPmLogLevel_##level_suffix, 0, msgid, 6, \
         k1 "\001" k2 "\001" k3 "\001" k4 "\001" k5 "\001" k6, \
         f1 "\001" f2 "\001" f3 "\001" f4 "\001" f5 "\001" f6, \
-        free_text_fmt, \
         "{"  "\"" k1 "\":" f1 ","  "\"" k2 "\":" f2 ","  "\"" k3 "\":" f3 ","  "\"" k4 "\":" f4 ","  "\"" k5 "\":" f5 ","  "\"" k6 "\":" f6 "} " free_text_fmt, \
         v1, v2, v3, v4, v5, v6, ## __VA_ARGS__)
 
@@ -83,7 +77,6 @@
         ctx, kPmLogLevel_##level_suffix, 0, msgid, 7, \
         k1 "\001" k2 "\001" k3 "\001" k4 "\001" k5 "\001" k6 "\001" k7, \
         f1 "\001" f2 "\001" f3 "\001" f4 "\001" f5 "\001" f6 "\001" f7, \
-        free_text_fmt, \
         "{"  "\"" k1 "\":" f1 ","  "\"" k2 "\":" f2 ","  "\"" k3 "\":" f3 ","  "\"" k4 "\":" f4 ","  "\"" k5 "\":" f5 ","  "\"" k6 "\":" f6 ","  "\"" k7 "\":" f7 "} " free_text_fmt, \
         v1, v2, v3, v4, v5, v6, v7, ## __VA_ARGS__)
 
@@ -92,7 +85,6 @@
         ctx, kPmLogLevel_##level_suffix, 0, msgid, 8, \
         k1 "\001" k2 "\001" k3 "\001" k4 "\001" k5 "\001" k6 "\001" k7 "\001" k8, \
         f1 "\001" f2 "\001" f3 "\001" f4 "\001" f5 "\001" f6 "\001" f7 "\001" f8, \
-        free_text_fmt, \
         "{"  "\"" k1 "\":" f1 ","  "\"" k2 "\":" f2 ","  "\"" k3 "\":" f3 ","  "\"" k4 "\":" f4 ","  "\"" k5 "\":" f5 ","  "\"" k6 "\":" f6 ","  "\"" k7 "\":" f7 ","  "\"" k8 "\":" f8 "} " free_text_fmt, \
         v1, v2, v3, v4, v5, v6, v7, v8, ## __VA_ARGS__)
 
@@ -101,7 +93,6 @@
         ctx, kPmLogLevel_##level_suffix, 0, msgid, 9, \
         k1 "\001" k2 "\001" k3 "\001" k4 "\001" k5 "\001" k6 "\001" k7 "\001" k8 "\001" k9, \
         f1 "\001" f2 "\001" f3 "\001" f4 "\001" f5 "\001" f6 "\001" f7 "\001" f8 "\001" f9, \
-        free_text_fmt, \
         "{"  "\"" k1 "\":" f1 ","  "\"" k2 "\":" f2 ","  "\"" k3 "\":" f3 ","  "\"" k4 "\":" f4 ","  "\"" k5 "\":" f5 ","  "\"" k6 "\":" f6 ","  "\"" k7 "\":" f7 ","  "\"" k8 "\":" f8 ","  "\"" k9 "\":" f9 "} " free_text_fmt, \
         v1, v2, v3, v4, v5, v6, v7, v8, v9, ## __VA_ARGS__)
 
@@ -110,7 +101,6 @@
         ctx, kPmLogLevel_##level_suffix, 0, msgid, 10, \
         k1 "\001" k2 "\001" k3 "\001" k4 "\001" k5 "\001" k6 "\001" k7 "\001" k8 "\001" k9 "\001" k10, \
         f1 "\001" f2 "\001" f3 "\001" f4 "\001" f5 "\001" f6 "\001" f7 "\001" f8 "\001" f9 "\001" f10, \
-        free_text_fmt, \
         "{"  "\"" k1 "\":" f1 ","  "\"" k2 "\":" f2 ","  "\"" k3 "\":" f3 ","  "\"" k4 "\":" f4 ","  "\"" k5 "\":" f5 ","  "\"" k6 "\":" f6 ","  "\"" k7 "\":" f7 ","  "\"" k8 "\":" f8 ","  "\"" k9 "\":" f9 ","  "\"" k10 "\":" f10 "} " free_text_fmt, \
         v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, ## __VA_ARGS__)
 
@@ -131,7 +121,7 @@ f.write('    _PmLogMsgKV( \\\n')
 f.write('        ctx, kPmLogLevel_##level_suffix, {0}, msgid, 0, \\\n'.format(flags))
 f.write('        NULL, \\\n')
 f.write('        NULL, \\\n')
-f.write('        free_text_fmt, free_text_fmt, ## __VA_ARGS__)\n')
+f.write('        "{} " free_text_fmt, ## __VA_ARGS__)\n')
 
 for i in range(1, max_kv_pairs+1):
         f.write('\n')
@@ -152,8 +142,6 @@ for i in range(1, max_kv_pairs+1):
         for j in range(2, i+1):
             f.write(' "\\001" f{0}'.format(j))
         f.write(', \\\n')
-
-        f.write('        free_text_fmt, \\\n')
 
         f.write('        "{" ')
         for j in range(1, i):

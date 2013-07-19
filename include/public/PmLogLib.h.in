@@ -913,8 +913,8 @@ const char* PmLogGetErrDbgString(PmLogErr logErr);
 extern PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level,
 		unsigned int flags, const char *msgid, size_t kv_count,
 		const char *check_keywords, const char *check_formats,
-		const char *check_free_text_fmt, const char *fmt, ...)
-__attribute__((format(printf, 9, 10)));
+		const char *fmt, ...)
+__attribute__((format(printf, 8, 9)));
 
 /*********************************************************************/
 /* PmLogMsg */
