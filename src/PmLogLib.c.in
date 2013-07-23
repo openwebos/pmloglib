@@ -76,28 +76,23 @@ pid_t gettid(void)
 // don't check in with this on!
 //#define DEBUG_ENABLED
 
-
 #ifdef DEBUG_ENABLED
 
 	/***********************************************************************
 	 * DbgPrint
 	 ***********************************************************************/
 	#define DbgPrint(...) \
-		{														\
-			fprintf(stdout, COMPONENT_PREFIX __VA_ARGS__);		\
-			syslog(LOG_DEBUG, COMPONENT_PREFIX __VA_ARGS__);	\
+		{                                                                           \
+			fprintf(stdout, COMPONENT_PREFIX __VA_ARGS__);                          \
+			syslog(LOG_DEBUG, PMLOG_IDENTIFIER " " COMPONENT_PREFIX __VA_ARGS__);   \
 		}
 
-
-	/***********************************************************************
-	 * ErrPrint
-	 ***********************************************************************/
 	#define ErrPrint(...) \
-		{														\
-			fprintf(stderr, COMPONENT_PREFIX __VA_ARGS__);		\
-			syslog(LOG_ERR, COMPONENT_PREFIX __VA_ARGS__);		\
+		{                                                                           \
+			fprintf(stderr, COMPONENT_PREFIX __VA_ARGS__);                          \
+			fprintf(stderr, "\n");                                                  \
+			syslog(LOG_ERR, PMLOG_IDENTIFIER " " COMPONENT_PREFIX __VA_ARGS__);     \
 		}
-
 #else
 
 	/***********************************************************************
@@ -105,17 +100,15 @@ pid_t gettid(void)
 	 ***********************************************************************/
 	#define DbgPrint(...)
 
-
 	/***********************************************************************
-	 * ErrPrint
-	 ***********************************************************************/
+	* ErrPrint
+	***********************************************************************/
 	#define ErrPrint(...) \
-		{														\
-			syslog(LOG_ERR, COMPONENT_PREFIX __VA_ARGS__);		\
-		}
+	{                                                                           \
+		syslog(LOG_ERR, PMLOG_IDENTIFIER " " COMPONENT_PREFIX __VA_ARGS__);     \
+	}
 
 #endif // DEBUG_ENABLED
-
 
 //#######################################################################
 
