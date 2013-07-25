@@ -2281,7 +2281,8 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 	PmLogErr       err;
 	va_list        args;
 	int            ret;
-	char           final_str[BUFFER_LEN];
+	char           final_str[BUFFER_LEN] = {0, };
+	char           json_str[BUFFER_LEN] = {0, };
 
 	context_ptr = PrvResolveContext(context);
 	if (!context_ptr) {
@@ -2318,7 +2319,6 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 		}
 	} else {
 		// for debug level, make sure msgid is NULL and no kv pairs
-
 		if (msgid) {
 			ErrPrint("DBGLVL_MSGID {\"CONTEXT\":\"%s\","
 			         "\"MSGID\":\"%s\"} %s",
@@ -2338,16 +2338,31 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 	va_start(args, fmt);
 	ret = vsnprintf(final_str, sizeof(final_str), fmt, args);
 	va_end(args);
-
 	if (ret < 0) {
 		ErrPrint("VSNPRN_ERR {\"CONTEXT\":\"%s\","
-		         "\"MSGID\":\"%s\",\"ERR_STR\":\"%s\"}",
-		         context_ptr->component, msgid ? msgid : "NULL",
-		         strerror(errno));
+                 "\"MSGID\":\"%s\",\"ERR_STR\":\"%s\"}",
+                 context_ptr->component, msgid ? msgid : "NULL",
+                 strerror(errno));
 		return kPmLogErr_FormatStringFailed;
 	} else if (ret >= sizeof(final_str)) {
 		DbgPrint("vsnprintf truncation for CONTEXT:%s, MSGID:%s",
-		         context_ptr->component, msgid ? msgid : "NULL");
+                 context_ptr->component, msgid ? msgid : "NULL");
+	}
+
+	if (kPmLogLevel_Debug != level) {
+		// split json string and freetext
+		if (strncpy(json_str, final_str, strchr(final_str, '}') - final_str + 1)) { // + 1 means include '}'
+			// validate key-value pairs string is valid json data
+			if (!validate_json_string(json_str)) {
+				ErrPrint("INVALID_JSON {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
+						 context_ptr->component, msgid);
+				return kPmLogErr_InvalidFormat;
+			}
+		} else {
+			ErrPrint("INVALID_JSON {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
+					 context_ptr->component, msgid);
+			return kPmLogErr_InvalidFormat;
+		}
 	}
 
 	return PrvLogWrite(context_ptr, level, msgid, final_str);
