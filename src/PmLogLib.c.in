@@ -2283,6 +2283,7 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 	int            ret;
 	char           final_str[BUFFER_LEN] = {0, };
 	char           json_str[BUFFER_LEN] = {0, };
+	const int      empty_kv_pair_len = 3;
 
 	context_ptr = PrvResolveContext(context);
 	if (!context_ptr) {
@@ -2296,10 +2297,10 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 
 	if (kPmLogLevel_Debug != level) {
 
-        err = validate_msgid(msgid, context_ptr);
-        if (err != kPmLogErr_None) {
-            return err;
-        }
+		err = validate_msgid(msgid, context_ptr);
+		if (err != kPmLogErr_None) {
+			return err;
+		}
 
 		if (kv_count) {
 			// make sure number of keys received matches with
@@ -2316,6 +2317,9 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 				         context_ptr->component, msgid);
 				return kPmLogErr_InvalidFormat;
 			}
+		} else {
+			// Add "{} " when kv_count comes 0.
+			snprintf(final_str, sizeof(final_str), "{} ");
 		}
 	} else {
 		// for debug level, make sure msgid is NULL and no kv pairs
@@ -2336,7 +2340,8 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 	}
 
 	va_start(args, fmt);
-	ret = vsnprintf(final_str, sizeof(final_str), fmt, args);
+	ret = vsnprintf(kv_count != 0 ? final_str : final_str + empty_kv_pair_len,
+                    sizeof(final_str), fmt, args);
 	va_end(args);
 	if (ret < 0) {
 		ErrPrint("VSNPRN_ERR {\"CONTEXT\":\"%s\","
@@ -2351,7 +2356,7 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 
 	if (kPmLogLevel_Debug != level) {
 		// split json string and freetext
-		if (strncpy(json_str, final_str, strchr(final_str, '}') - final_str + 1)) { // + 1 means include '}'
+		if (strncpy(json_str, final_str, strstr(final_str, "} ") - final_str + 1)) { // + 1 means include '}'
 			// validate key-value pairs string is valid json data
 			if (!validate_json_string(json_str)) {
 				ErrPrint("INVALID_JSON {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",

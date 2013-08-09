@@ -22,7 +22,7 @@
         ctx, kPmLogLevel_##level_suffix, 0, msgid, 0, \
         NULL, \
         NULL, \
-        "{} " free_text_fmt, ## __VA_ARGS__)
+        free_text_fmt, ## __VA_ARGS__)
 
 #define _PmLogMsgKV1(ctx, level_suffix, msgid, k1, f1, v1, free_text_fmt, ...) \
     _PmLogMsgKV( \
@@ -121,7 +121,7 @@ f.write('    _PmLogMsgKV( \\\n')
 f.write('        ctx, kPmLogLevel_##level_suffix, {0}, msgid, 0, \\\n'.format(flags))
 f.write('        NULL, \\\n')
 f.write('        NULL, \\\n')
-f.write('        "{} " free_text_fmt, ## __VA_ARGS__)\n')
+f.write('        free_text_fmt, ## __VA_ARGS__)\n')
 
 for i in range(1, max_kv_pairs+1):
         f.write('\n')
