@@ -2317,9 +2317,6 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 				         context_ptr->component, msgid);
 				return kPmLogErr_InvalidFormat;
 			}
-		} else {
-			// Add "{} " when kv_count comes 0.
-			snprintf(final_str, sizeof(final_str), "{} ");
 		}
 	} else {
 		// for debug level, make sure msgid is NULL and no kv pairs
@@ -2337,6 +2334,11 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 			         "kv_count should be 0 for DEBUG level");
 			return kPmLogErr_InvalidFormat;
 		}
+	}
+
+	if (kv_count == 0) {
+		// Add "{} " when kv_count comes 0.
+		snprintf(final_str, sizeof(final_str), "{} ");
 	}
 
 	va_start(args, fmt);
