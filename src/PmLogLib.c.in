@@ -2081,8 +2081,8 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
 
         if (kvpairs) {
 			if (!validate_json_string(kvpairs)) {
-				ErrPrint("INVALID_JSON {\"CONTEXT\":\"%s\", \"KVPAIRS\":%s}",
-                         contextP->component, kvpairs);
+				ErrPrint("INVALID_JSON {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
+                         contextP->component, msgid);
 				return kPmLogErr_InvalidFormat;
 			}
         }
