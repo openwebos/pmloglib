@@ -39,6 +39,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <glib.h>
+#include <glib/gprintf.h>
 #include <pbnjson.h>
 
 
@@ -72,29 +73,40 @@ pid_t gettid(void)
 #define BUFFER_LEN 1024
 #define CONFIG_DIR "@WEBOS_INSTALL_SYSCONFDIR@/pmlog.d"
 #define MSGID_LEN 32
+#define PIDSTR_LEN 32
+
+void CallSysLog(const char* pidtid, const char* fmt, ...)
+{
+	char buffer[512] = {0,};
+	int index = 0;
+	va_list args;
+	index = snprintf(buffer, sizeof(buffer), "%s %s %s", PMLOG_IDENTIFIER, pidtid, COMPONENT_PREFIX);
+	va_start (args, fmt);
+	g_vsnprintf (buffer + index, sizeof(buffer), fmt, args);
+	va_end (args);
+	syslog(LOG_ERR, "%s", buffer);
+}
 
 // don't check in with this on!
 //#define DEBUG_ENABLED
 
 #ifdef DEBUG_ENABLED
-
 	/***********************************************************************
 	 * DbgPrint
 	 ***********************************************************************/
 	#define DbgPrint(...) \
 		{                                                                           \
 			fprintf(stdout, COMPONENT_PREFIX __VA_ARGS__);                          \
-			syslog(LOG_DEBUG, PMLOG_IDENTIFIER " " COMPONENT_PREFIX __VA_ARGS__);   \
+			CallSysLog("[]", __VA_ARGS__)                                          \
 		}
 
-	#define ErrPrint(...) \
+	#define ErrPrint(pidtid, ...) \
 		{                                                                           \
 			fprintf(stderr, COMPONENT_PREFIX __VA_ARGS__);                          \
 			fprintf(stderr, "\n");                                                  \
-			syslog(LOG_ERR, PMLOG_IDENTIFIER " " COMPONENT_PREFIX __VA_ARGS__);     \
+			CallSysLog(pidtid, __VA_ARGS__);                                         \
 		}
 #else
-
 	/***********************************************************************
 	 * DbgPrint
 	 ***********************************************************************/
@@ -103,11 +115,7 @@ pid_t gettid(void)
 	/***********************************************************************
 	* ErrPrint
 	***********************************************************************/
-	#define ErrPrint(...) \
-	{                                                                           \
-		syslog(LOG_ERR, PMLOG_IDENTIFIER " " COMPONENT_PREFIX __VA_ARGS__);     \
-	}
-
+	#define ErrPrint(pidtid, ...) CallSysLog(pidtid, __VA_ARGS__)
 #endif // DEBUG_ENABLED
 
 //#######################################################################
@@ -183,6 +191,46 @@ static void PrintAppendToFile(const char* filePath, const char* fmt, ...)
 #endif // DEBUG_LOGGING
 
 
+/***********************************************************************
+ * mysprintf
+ *
+ * Easy to use wrapper for sprintf to make is safe against buffer
+ * overflows and to report any truncations.
+ ***********************************************************************/
+static void mysprintf(char* dst, size_t dstSize, const char* fmt, ...)
+	__attribute__((format(printf, 3, 4)));
+
+
+/***********************************************************************
+ * GetPidStr
+ *
+ * Return a formatted string containing the process and thread ids
+ * according to the context flags.
+ ***********************************************************************/
+void GetPidStr(PmLogContext_ *context,char *ptidStr,long int ptidStrLen)
+{
+	pid_t    pid;
+	pid_t    tid;
+
+	memset(ptidStr, 0, ptidStrLen);
+
+	if ((context->info.flags & kPmLogFlag_LogProcessIds) ||
+	    (context->info.flags & kPmLogFlag_LogThreadIds)) {
+		pid = getpid();
+		tid = gettid();
+		if (context->info.flags & kPmLogFlag_LogThreadIds &&
+		    (tid != pid)) {
+			mysprintf(ptidStr, ptidStrLen, "[%d:%d]", (int) pid,
+			    (int) tid);
+		} else {
+			mysprintf(ptidStr, ptidStrLen, "[%d]", (int) pid);
+		}
+	} else {
+		g_strlcpy(ptidStr, "[]", ptidStrLen);
+	}
+}
+
+
 //#######################################################################
 
 /*********************************************************************
@@ -201,26 +249,26 @@ static PmLogErr validate_msgid(const char *msgid, PmLogContext_ *context_ptr)
 {
 	int		msgid_len;
 	const char	*ptr_index;
+	char            ptidStr[ PIDSTR_LEN ];
 
+	GetPidStr(context_ptr, ptidStr, sizeof(ptidStr));
 
 	if (!msgid) {
-		ErrPrint("NULL_MSGID {\"CONTEXT\":\"%s\"} %s",
-		         context_ptr->component,
-		         "NULL MSGID provided for non-debug log");
+		ErrPrint(ptidStr, "NULL_MSGID {\"CONTEXT\":\"%s\"} NULL MSGID provided for non-debug log", context_ptr->component);
 		return kPmLogErr_InvalidMsgID;
 	}
 
 	// Check each character in msgid against our list of invalid ones.
 	for (ptr_index = msgid, msgid_len = 0; *ptr_index != '\0'; ++ptr_index, ++msgid_len) {
 		if (msgid_len >= MSGID_LEN) {
-			ErrPrint("LONG_MSGID {\"CONTEXT\":\"%s\"} %s",
+			ErrPrint(ptidStr, "%s LONG_MSGID {\"CONTEXT\":\"%s\"} %s",
 			         context_ptr->component,
 			         "MSGID's length is restricted within 32 characters");
 			return kPmLogErr_InvalidMsgID;
 		}
 
 		if (strchr(" {}", *ptr_index) != NULL) {
-			ErrPrint("INVALID_MSGID {\"CONTEXT\":\"%s\", \"MSGID\":\"%s\"} msgid contains space, { or }.",
+			ErrPrint(ptidStr, "INVALID_MSGID {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"} msgid contains space, { or }.",
 			         context_ptr->component, msgid);
 			return kPmLogErr_InvalidMsgID;
 		}
@@ -241,13 +289,13 @@ static void mystrcpy(char* dst, size_t dstSize, const char* src)
 
 	if (dst == NULL)
 	{
-		ErrPrint("mystrcpy null dst\n");
+		DbgPrint("mystrcpy null dst\n");
 		return;
 	}
 
 	if (dstSize < 1)
 	{
-		ErrPrint("mystrcpy invalid dst size\n");
+		DbgPrint("mystrcpy invalid dst size\n");
 		return;
 	}
 
@@ -255,14 +303,14 @@ static void mystrcpy(char* dst, size_t dstSize, const char* src)
 
 	if (src == NULL)
 	{
-		ErrPrint("mystrcpy null src\n");
+		DbgPrint("mystrcpy null src\n");
 		return;
 	}
 
 	srcLen = strlen(src);
 	if (srcLen >= dstSize)
 	{
-		ErrPrint("mystrcpy buffer overflow\n");
+		DbgPrint("mystrcpy buffer overflow\n");
 		srcLen = dstSize - 1;
 	}
 
@@ -340,29 +388,18 @@ static void mystrcat(char* dst, size_t dstSize, const char* src)
  * overflows and to report any truncations.
  ***********************************************************************/
 static void mysprintf(char* dst, size_t dstSize, const char* fmt, ...)
-	__attribute__((format(printf, 3, 4)));
-
-
-/***********************************************************************
- * mysprintf
- *
- * Easy to use wrapper for sprintf to make is safe against buffer
- * overflows and to report any truncations.
- ***********************************************************************/
-static void mysprintf(char* dst, size_t dstSize, const char* fmt, ...)
 {
 	va_list	args;
-	int     n;
 
 	if (dst == NULL)
 	{
-		ErrPrint("mysprintf null dst\n");
+		DbgPrint("mysprintf null dst\n");
 		return;
 	}
 
 	if (dstSize < 1)
 	{
-		ErrPrint("mysprintf invalid dst size\n");
+		DbgPrint("mysprintf invalid dst size\n");
 		return;
 	}
 
@@ -370,18 +407,12 @@ static void mysprintf(char* dst, size_t dstSize, const char* fmt, ...)
 
 	if (fmt == NULL)
 	{
-		ErrPrint("mysprintf null fmt\n");
+		DbgPrint("mysprintf null fmt\n");
 		return;
 	}
 
 	va_start(args, fmt);
-
-	n = vsnprintf(dst, dstSize, fmt, args);
-	if (n >= dstSize)
-	{
-		ErrPrint("mysprintf buffer overflow\n");
-	}
-
+	g_vsnprintf(dst, dstSize, fmt, args);
 	va_end(args);
 }
 
@@ -800,6 +831,22 @@ static void parse_config_flags(jvalue_ref j_context, const gchar *file_name, con
 	PmLogContext  context;
 	PmLogContext_ *context_ptr;
 	int           err;
+	char          ptidStr[ PIDSTR_LEN ];
+
+	err = PmLogGetContext(context_name, &context);
+	if (kPmLogErr_None != err) {
+		DbgPrint("FLG_CONTEXT_ERR {\"file\":\"%s\",\"context\":\"%s\"}",
+		         file_name, context_name);
+		return;
+	}
+
+	context_ptr = PrvResolveContext(context);
+	GetPidStr(context_ptr, ptidStr, sizeof(ptidStr));
+	if (!context_ptr) {
+		ErrPrint(ptidStr, "FLG_RSVL_ERR {\"file\":\"%s\",\"context\":\"%s\"}",
+		         file_name, context_name);
+		return;
+	}
 
 	ret = jobject_get_exists(j_context, j_cstr_to_buffer(LOG_PROCESS_IDS_TAG), &value);
 	if (ret) { //found logProcessIds
@@ -809,7 +856,7 @@ static void parse_config_flags(jvalue_ref j_context, const gchar *file_name, con
 			else
 				flags &= ~kPmLogFlag_LogProcessIds;
 		} else {
-			ErrPrint("INV_PSID {\"file\":\"%s\",\"context\":\"%s\"}",
+			ErrPrint(ptidStr, "INV_PSID {\"file\":\"%s\",\"context\":\"%s\"}",
 			         file_name, context_name);
 		}
 	}
@@ -822,7 +869,7 @@ static void parse_config_flags(jvalue_ref j_context, const gchar *file_name, con
 			else
 				flags &= ~kPmLogFlag_LogThreadIds;
 		} else {
-			ErrPrint("INV_THID {\"file\":\"%s\",\"context\":\"%s\"}",
+			ErrPrint(ptidStr, "INV_THID {\"file\":\"%s\",\"context\":\"%s\"}",
 			         file_name, context_name);
 		}
 	}
@@ -835,7 +882,7 @@ static void parse_config_flags(jvalue_ref j_context, const gchar *file_name, con
 			else
 				flags &= ~kPmLogFlag_LogToConsole;
 		} else {
-			ErrPrint("INV_LOG_TO_CON {\"file\":\"%s\",\"context\":\"%s\"}",
+			ErrPrint(ptidStr, "INV_LOG_TO_CON {\"file\":\"%s\",\"context\":\"%s\"}",
 			         file_name, context_name);
 		}
 	}
@@ -843,24 +890,10 @@ static void parse_config_flags(jvalue_ref j_context, const gchar *file_name, con
 	if (!flags)
 		return;
 
-	err = PmLogGetContext(context_name, &context);
-	if (kPmLogErr_None != err) {
-		ErrPrint("FLG_CONTEXT_ERR {\"file\":\"%s\",\"context\":\"%s\"}",
-		         file_name, context_name);
-		return;
-	}
-
-	context_ptr = PrvResolveContext(context);
-	if (!context_ptr) {
-		ErrPrint("FLG_RSVL_ERR {\"file\":\"%s\",\"context\":\"%s\"}",
-		         file_name, context_name);
-		return;
-	}
-
 	//Set all the flags at once
 	err = PrvSetContextFlag(context_ptr, flags, true);
 	if (err != kPmLogErr_None) {
-		ErrPrint("SET_CTX_FLG_ERR {\"file\":\"%s\",\"context\":\"%s\"}",
+		ErrPrint(ptidStr, "SET_CTX_FLG_ERR {\"file\":\"%s\",\"context\":\"%s\"}",
 		         file_name, context_name);
 	}
 }
@@ -879,7 +912,7 @@ static bool parse_json_file(const char *file_name)
 	parsed = jdom_parse_file(file_name, &schemainfo, DOMOPT_INPUT_NOCHANGE);
 	if (jis_null(parsed)) {
 		j_release(&parsed);
-		ErrPrint("JSON_PARSE_ERR {\"file\":\"%s\"}", file_name);
+		ErrPrint("[]", "JSON_PARSE_ERR {\"file\":\"%s\"}", file_name);
 		return false;
 	}
 
@@ -894,7 +927,7 @@ static bool parse_json_file(const char *file_name)
 			if (CONV_OK == jboolean_get(value, &flag_value)) {
 				gGlobalsP->kvValidateFlag = (1 == flag_value);
 			} else {
-				ErrPrint("INV_KVFLAG {\"file\":\"%s\"}", file_name);
+				ErrPrint("[]", "INV_KVFLAG {\"file\":\"%s\"}", file_name);
 			}
 		}
 	}
@@ -920,12 +953,12 @@ static bool parse_json_file(const char *file_name)
 					found_context = true;
 					name = jstring_get(value);
 					if (!name.m_str) {
-						ErrPrint("CTX_NAME_ERR {\"index\":%d,\"file\":\"%s\"}",
+						ErrPrint("[]", "CTX_NAME_ERR {\"index\":%d,\"file\":\"%s\"}",
 						         index, file_name);
 						goto context_end;
 					}
 				} else {
-					ErrPrint("NO_CTX_NAME {\"index\":%d,\"file\":\"%s\"}",
+					ErrPrint("[]", "NO_CTX_NAME {\"index\":%d,\"file\":\"%s\"}",
 					         index, file_name);
 					goto context_end;
 				}
@@ -934,20 +967,20 @@ static bool parse_json_file(const char *file_name)
 				if (ret) { //found level
 					level = jstring_get(value);
 					if (!level.m_str) {
-						ErrPrint("NO_CTX_LVL {\"context\":\"%s\",\"file\":\"%s\"}",
+						ErrPrint("[]", "NO_CTX_LVL {\"context\":\"%s\",\"file\":\"%s\"}",
 						         name.m_str, file_name);
 						goto context_end;
 					}
 				} else {
-					ErrPrint("CTX_LVL_MISSING {\"context\":\"%s\",\"file\":\"%s\"}",
+					ErrPrint("[]", "CTX_LVL_MISSING {\"context\":\"%s\",\"file\":\"%s\"}",
 					         name.m_str, file_name);
 					goto context_end;
 				}
 
 				if (!PrvInitContext(name.m_str, level.m_str, err_msg, sizeof(err_msg))) {
-					ErrPrint("PrvInitContext failed for %s:%s: %s\n",
+					DbgPrint("PrvInitContext failed for %s:%s: %s\n",
 					         file_name, name.m_str, err_msg);
-					ErrPrint("INIT_CTX_ERR {\"file\":\"%s\",\"context\":\"%s\",\"err\":\"%s\"}",
+					ErrPrint("[]", "INIT_CTX_ERR {\"file\":\"%s\",\"context\":\"%s\",\"err\":\"%s\"}",
 					         file_name, name.m_str, err_msg);
 						goto context_end;
 				}
@@ -965,7 +998,7 @@ static bool parse_json_file(const char *file_name)
 	j_release(&parsed);
 
 	if (!found_context) {
-		ErrPrint("CTX_MISSING {\"file\":\"%s\"}", file_name);
+		ErrPrint("[]", "CTX_MISSING {\"file\":\"%s\"}", file_name);
 		return false;
 	}
 
@@ -982,11 +1015,11 @@ bool PmLogPrvReadConfigs(bool (*fn_ptr) (const char *file_name))
 	bool found_default_conf = false;
 
 	dir = g_dir_open(CONFIG_DIR, 0, &error);
-        if (!dir) {
-		ErrPrint("DIR_OPEN_ERR {\"Error\":\"%s\"}", error->message);
+	if (!dir) {
+		ErrPrint("[]", "DIR_OPEN_ERR {\"Error\":\"%s\"}", error->message);
 		g_error_free(error);
 		return false;
-        }
+	}
 
 	// default.conf should be the first one
 	full_path = g_build_filename(CONFIG_DIR, DEFAULT_CONFIG, NULL);
@@ -1046,7 +1079,6 @@ static void __attribute ((constructor)) init_function(void)
 {
 	const char* kPmLogLibSoFilePath = "@WEBOS_INSTALL_LIBDIR@/libPmLogLib.so";
 
-	int         err;
 	sem_t*      sem;
 	key_t       key;
 	int         shmid;
@@ -1069,8 +1101,7 @@ static void __attribute ((constructor)) init_function(void)
 	umask(mode);
 	if (sem == SEM_FAILED)
 	{
-		err = errno;
-		ErrPrint("sem_open error: %s\n", strerror(err));
+		DbgPrint("sem_open error: %s\n", strerror(errno));
 		return;
 	}
 
@@ -1088,8 +1119,7 @@ static void __attribute ((constructor)) init_function(void)
 	}
 	else
 	{
-		err = errno;
-		ErrPrint("dladdr err: %s\n", strerror(err));
+		DbgPrint("dladdr err: %s\n", strerror(errno));
 	}
 
 	// if lookup failed for some reason, fall back to expected
@@ -1103,8 +1133,7 @@ static void __attribute ((constructor)) init_function(void)
 	key = ftok(libFilePath, 'A');
 	if (key == -1)
 	{
-		err = errno;
-		ErrPrint("ftok error: %s\n", strerror(err));
+		DbgPrint("ftok error: %s\n", strerror(errno));
 		return;
 	}
 
@@ -1123,8 +1152,7 @@ static void __attribute ((constructor)) init_function(void)
 	shmid = shmget(key, shmSize, 0666 | IPC_CREAT);
 	if (shmid == -1)
 	{
-		err = errno;
-		ErrPrint("shmget error: %s\n", strerror(err));
+		DbgPrint("shmget error: %s\n", strerror(errno));
 		return;
 	}
 
@@ -1133,8 +1161,7 @@ static void __attribute ((constructor)) init_function(void)
 	data = (char*) shmat(shmid, NULL, 0 /* SHM_RDONLY */);
 	if (data == (char*) -1)
 	{
-		err = errno;
-		ErrPrint("shmat error: %s\n", strerror(err));
+		DbgPrint("shmat error: %s\n", strerror(errno));
 		return;
 	}
 
@@ -1184,7 +1211,7 @@ static void __attribute ((constructor)) init_function(void)
 	}
 	else
 	{
-		ErrPrint("unrecognized shared mem\n");
+		DbgPrint("unrecognized shared mem\n");
 
 		gGlobalsP = NULL;
 		gGlobalContextP = NULL;
@@ -1210,7 +1237,6 @@ static void __attribute ((constructor)) init_function(void)
 static void __attribute ((destructor)) fini_function(void)
 {
 	int		status;
-	int		err;
 
 	//------------------------------------------------------------
 
@@ -1224,8 +1250,7 @@ static void __attribute ((destructor)) fini_function(void)
 		status = shmdt(gShmData);
 		if (status != 0)
 		{
-			err = errno;
-			ErrPrint("shmdt error: %s\n", strerror(err));
+			DbgPrint("shmdt error: %s\n", strerror(errno));
 		}
 
 		gShmData = NULL;
@@ -1247,8 +1272,7 @@ static void __attribute ((destructor)) fini_function(void)
 		status = sem_close(gSem);
 		if (status != 0)
 		{
-			err = errno;
-			ErrPrint("sem_close error: %s\n", strerror(err));
+			DbgPrint("sem_close error: %s\n", strerror(errno));
 		}
 
 		gSem = SEM_FAILED;
@@ -1279,13 +1303,11 @@ PmLogGlobals* PmLogPrvGlobals(void)
 void PmLogPrvLock(void)
 {
 	int		status;
-	int		err;
 
 	status = sem_wait(gSem);
 	if (status == -1)
 	{
-		err = errno;
-		ErrPrint("sem_wait error: %s\n", strerror(err));
+		DbgPrint("sem_wait error: %s\n", strerror(errno));
 		return;
 	}
 }
@@ -1300,13 +1322,11 @@ void PmLogPrvLock(void)
 void PmLogPrvUnlock(void)
 {
 	int		status;
-	int		err;
 
 	status = sem_post(gSem);
 	if (status == -1)
 	{
-		err = errno;
-		ErrPrint("sem_post error: %s\n", strerror(err));
+		DbgPrint("sem_post error: %s\n", strerror(errno));
 		return;
 	}
 }
@@ -1927,7 +1947,7 @@ static bool HandleLogLibCommand(const char* msg)
 		logErr = PmLogGetNumContexts(&contextsNumber);
 		if (logErr != kPmLogErr_None)
 		{
-			ErrPrint("No contexts found. Error no: %d", logErr);
+			DbgPrint("No contexts found. Error no: %d", logErr);
 			return false;
 		}
 		for (contextIndex = 0; contextIndex < contextsNumber; ++contextIndex)
@@ -1935,7 +1955,7 @@ static bool HandleLogLibCommand(const char* msg)
 			logErr = PmLogGetIndContext(contextIndex, &context);
 			if(logErr != kPmLogErr_None)
 			{
-				ErrPrint("Context no %d not found. Error no: %d", contextIndex, logErr);
+				DbgPrint("Context no %d not found. Error no: %d", contextIndex, logErr);
 				continue;
 			}
 			contextP = PrvResolveContext(context);
@@ -1960,9 +1980,7 @@ static PmLogErr PrvLogWrite(PmLogContext_ *contextP, PmLogLevel level,
 		const char *msgid, const char *s)
 {
 	const char  *identStr;
-	pid_t       pid;
-	pid_t       tid;
-	char        ptidStr[ 32 ];
+	char        ptidStr[ PIDSTR_LEN ];
 	int         savedErrNo;
 
 	// one character before, 3 after, \0 terminator
@@ -1978,26 +1996,7 @@ static PmLogErr PrvLogWrite(PmLogContext_ *contextP, PmLogLevel level,
 
 	identStr = __progname;
 
-	if ((contextP->info.flags & kPmLogFlag_LogProcessIds) ||
-		(contextP->info.flags & kPmLogFlag_LogThreadIds))
-	{
-		pid = getpid();
-		tid = gettid();
-		if (contextP->info.flags & kPmLogFlag_LogThreadIds &&
-			(tid != pid))
-		{
-			mysprintf(ptidStr, sizeof(ptidStr), "[%d:%d]", (int) pid,
-				(int) tid);
-		}
-		else
-		{
-			mysprintf(ptidStr, sizeof(ptidStr), "[%d]", (int) pid);
-		}
-	}
-	else
-	{
-		strncpy(ptidStr, "[]", sizeof(ptidStr));
-	}
+	GetPidStr(contextP, ptidStr, sizeof(ptidStr));
 
 	if (PrvIsGlobalContext(contextP))
 	{
@@ -2059,9 +2058,10 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
 		const char* msgid, const char* kvpairs, const char* message)
 {
 	PmLogContext_*  contextP;
-	PmLogErr logErr;
-	char lineStr[BUFFER_LEN] = {0,};
-	int ret, err;
+	PmLogErr        logErr;
+	char            lineStr[BUFFER_LEN] = {0,};
+	int             ret;
+	char            ptidStr[PIDSTR_LEN];
 
 	contextP = PrvResolveContext(context);
 	if (!contextP) {
@@ -2079,31 +2079,32 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
             return logErr;
         }
 
+	GetPidStr(contextP, ptidStr, sizeof(ptidStr));
+
         if (kvpairs) {
 			if (!validate_json_string(kvpairs)) {
-				ErrPrint("INVALID_JSON {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
+				ErrPrint(ptidStr, "INVALID_JSON {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
                          contextP->component, msgid);
 				return kPmLogErr_InvalidFormat;
 			}
         }
 	} else { //debug level
 		if (msgid) {
-			ErrPrint("DBGLVL_MSGID {\"CONTEXT\":\"%s\","
-				"\"MSGID\":\"%s\"} %s",
+			ErrPrint(ptidStr, "DBGLVL_MSGID {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"} %s",
 				contextP->component, msgid,
 				"MSGID should be NULL for debug level");
 			return kPmLogErr_InvalidFormat;
 		}
 
 		if (kvpairs) {
-			ErrPrint("DBGLVL_KVPAIRS {\"CONTEXT\":\"%s\"} %s",
+			ErrPrint(ptidStr, "DBGLVL_KVPAIRS {\"CONTEXT\":\"%s\"} %s",
 				contextP->component,
 				"kvpairs should be NULL for DEBUG level");
 			return kPmLogErr_InvalidFormat;
 		}
 
 		if(!message) {
-			ErrPrint("INVALID_FREESTRING {\"CONTEXT\":\"%s\"}",
+			ErrPrint(ptidStr, "INVALID_FREESTRING {\"CONTEXT\":\"%s\"}",
 					contextP->component);
 			return kPmLogErr_InvalidFormat;
 		}
@@ -2113,9 +2114,8 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
                    kvpairs ? kvpairs : "{}",
                    message ? message : "");
 	if (ret < 0) {
-		err = errno;
-		ErrPrint("SNPRINTF_ERR {\"CONTEXT\":\"%s\", \"MSGID\":\"%s\",\"ERROR\":\"%s\"}",
-				contextP->component, msgid, strerror(err));
+		ErrPrint(ptidStr, "SNPRINTF_ERR {\"CONTEXT\":\"%s\", \"MSGID\":\"%s\",\"ERROR\":\"%s\"}",
+				contextP->component, msgid, strerror(errno));
 		return kPmLogErr_FormatStringFailed;
 	} else {
 		if (ret >= sizeof(lineStr)) {
@@ -2134,10 +2134,12 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
 static PmLogErr PrvLogVPrint(PmLogContext_* contextP, PmLogLevel level,
 	const char* fmt, va_list args)
 {
-	PmLogErr logErr;
-	char     lineStr[BUFFER_LEN];
-	int      n;
-	int      err;
+	PmLogErr  logErr;
+	char      lineStr[BUFFER_LEN];
+	int       n;
+	char      ptidStr[ PIDSTR_LEN ];
+
+	GetPidStr(contextP, ptidStr, sizeof(ptidStr));
 
 	if ((fmt == NULL) || (fmt[0] == 0))
 	{
@@ -2147,8 +2149,7 @@ static PmLogErr PrvLogVPrint(PmLogContext_* contextP, PmLogLevel level,
 	n = vsnprintf(lineStr, sizeof(lineStr), fmt, args);
 	if (n < 0)
 	{
-		err = errno;
-		ErrPrint("vsnprintf error %s\n", strerror(err));
+		ErrPrint(ptidStr, "vsnprintf error %s\n", strerror(errno));
 		logErr = kPmLogErr_FormatStringFailed;
 	}
 	else
@@ -2181,7 +2182,7 @@ PmLogErr PmLogPrint_(PmLogContext context, PmLogLevel level,
 	logErr = PmLogGetContext(LEGACY_LOG, &forced_context);
 	if (logErr != kPmLogErr_None) {
 		forced_context = context;
-		ErrPrint("%s: PmLogGetContext err %d", __func__, logErr);
+		DbgPrint("%s: PmLogGetContext err %d", __func__, logErr);
 	}
 
 	contextP = PrvResolveContext(forced_context);
@@ -2216,7 +2217,7 @@ static bool validate_keys(size_t kv_count, const char *check_keywords,
 		return false;
 
 	if (!kv_count) {
-		ErrPrint("MISSING_KV {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
+		ErrPrint("[]", "MISSING_KV {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
 		         context_name, msgid);
 		return false;
 	}
@@ -2229,7 +2230,7 @@ static bool validate_keys(size_t kv_count, const char *check_keywords,
 			// (start of heading) ASCII char
 			current_key++;
 		} else if (c < ' ' || c >= 0x7f) {
-			ErrPrint("INVALID_KEY {\"CONTEXT\":\"%s\","
+			ErrPrint("[]", "INVALID_KEY {\"CONTEXT\":\"%s\","
 			         "\"MSGID\":\"%s\",\"KEY\":%d,"
 			         "\"INVALID_CHAR\":\"%c\"}",
 			         context_name, msgid, current_key, c);
@@ -2238,7 +2239,7 @@ static bool validate_keys(size_t kv_count, const char *check_keywords,
 			if ('"' == check_keywords[1] || '\\' == check_keywords[1]) {
 				check_keywords++;
 			} else {
-				ErrPrint("INVALID_KEY {\"CONTEXT\":\"%s\","
+				ErrPrint("[]", "INVALID_KEY {\"CONTEXT\":\"%s\","
 				         "\"MSGID\":\"%s\",\"KEY\":%d,"
 				         "\"INVALID_CHAR\":\"%c\"}",
 				         context_name, msgid, current_key,
@@ -2284,6 +2285,7 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 	char           final_str[BUFFER_LEN] = {0, };
 	char           json_str[BUFFER_LEN] = {0, };
 	const int      empty_kv_pair_len = 3;
+	char           ptidStr[ PIDSTR_LEN ];
 
 	context_ptr = PrvResolveContext(context);
 	if (!context_ptr) {
@@ -2302,34 +2304,36 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 			return err;
 		}
 
+		GetPidStr(context_ptr, ptidStr, sizeof(ptidStr));
+
 		if (kv_count) {
 			// make sure number of keys received matches with
 			// kv_count
 			if (!validate_keys(kv_count, check_keywords,
-			    context_ptr->component, msgid)) {
+                context_ptr->component, msgid)) {
+				ErrPrint(ptidStr, "MISMATCHED_FMT {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
+                         context_ptr->component, msgid);
 				return kPmLogErr_InvalidFormat;
 			}
 
 			// check_formats should contain kv_count number of '%' chars
 			if (!validate_format(kv_count, check_formats)) {
-				ErrPrint("MISMATCHED_FMT {\"CONTEXT\":\"%s\","
-				         "\"MSGID\":\"%s\"}",
-				         context_ptr->component, msgid);
+				ErrPrint(ptidStr, "MISMATCHED_FMT {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
+                         context_ptr->component, msgid);
 				return kPmLogErr_InvalidFormat;
 			}
 		}
 	} else {
 		// for debug level, make sure msgid is NULL and no kv pairs
 		if (msgid) {
-			ErrPrint("DBGLVL_MSGID {\"CONTEXT\":\"%s\","
-			         "\"MSGID\":\"%s\"} %s",
+			ErrPrint(ptidStr, "DBGLVL_MSGID {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"} %s",
 			         context_ptr->component, msgid,
 			         "MSGID should be NULL for debug level");
 			return kPmLogErr_InvalidFormat;
 		}
 
 		if (kv_count) {
-			ErrPrint("DBGLVL_KVCOUNT {\"CONTEXT\":\"%s\"} %s",
+			ErrPrint(ptidStr, "DBGLVL_KVCOUNT {\"CONTEXT\":\"%s\"} %s",
 			         context_ptr->component,
 			         "kv_count should be 0 for DEBUG level");
 			return kPmLogErr_InvalidFormat;
@@ -2346,8 +2350,7 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
                     sizeof(final_str), fmt, args);
 	va_end(args);
 	if (ret < 0) {
-		ErrPrint("VSNPRN_ERR {\"CONTEXT\":\"%s\","
-                 "\"MSGID\":\"%s\",\"ERR_STR\":\"%s\"}",
+		ErrPrint(ptidStr, "VSNPRN_ERR {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\",\"ERR_STR\":\"%s\"}",
                  context_ptr->component, msgid ? msgid : "NULL",
                  strerror(errno));
 		return kPmLogErr_FormatStringFailed;
@@ -2361,12 +2364,12 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 		if (strncpy(json_str, final_str, strstr(final_str, "} ") - final_str + 1)) { // + 1 means include '}'
 			// validate key-value pairs string is valid json data
 			if (!validate_json_string(json_str)) {
-				ErrPrint("INVALID_JSON {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
+				ErrPrint(ptidStr, "INVALID_JSON {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
 						 context_ptr->component, msgid);
 				return kPmLogErr_InvalidFormat;
 			}
 		} else {
-			ErrPrint("INVALID_JSON {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
+			ErrPrint(ptidStr, "INVALID_JSON {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
 					 context_ptr->component, msgid);
 			return kPmLogErr_InvalidFormat;
 		}
@@ -2400,7 +2403,7 @@ PmLogErr PmLogVPrint_(PmLogContext context, PmLogLevel level,
         logErr = PmLogGetContext(LEGACY_LOG, &forced_context);
         if (logErr != kPmLogErr_None) {
                 forced_context = context;
-                ErrPrint("%s: PmLogGetContext err %d", __func__, logErr);
+                DbgPrint("%s: PmLogGetContext err %d", __func__, logErr);
         }
 
         contextP = PrvResolveContext(forced_context);
