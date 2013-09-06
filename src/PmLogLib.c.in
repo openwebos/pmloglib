@@ -2079,7 +2079,7 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
             return logErr;
         }
 
-	GetPidStr(contextP, ptidStr, sizeof(ptidStr));
+		GetPidStr(contextP, ptidStr, sizeof(ptidStr));
 
         if (kvpairs) {
 			if (!validate_json_string(kvpairs)) {
@@ -2355,22 +2355,27 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
                  strerror(errno));
 		return kPmLogErr_FormatStringFailed;
 	} else if (ret >= sizeof(final_str)) {
-		DbgPrint("vsnprintf truncation for CONTEXT:%s, MSGID:%s",
+		ErrPrint(ptidStr, "MSG_TRUNCATED {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\",\"CAUSE\":\"Log message exceeded 1024 bytes\"}",
                  context_ptr->component, msgid ? msgid : "NULL");
 	}
 
 	if (kPmLogLevel_Debug != level) {
+		char *ptr_closing = strstr(final_str, "} ");
+		if (!ptr_closing) {
+			char truncated[256] = {0,};
+			snprintf(truncated, sizeof(truncated), final_str);
+			ErrPrint(ptidStr,
+                     "INVALID_JSON {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\",\"CAUSE\":\"The json string was truncated\",\"TRUNCATED\":%s ...\"}}",
+                     context_ptr->component, msgid, truncated);
+			return kPmLogErr_InvalidFormat;
+		}
 		// split json string and freetext
-		if (strncpy(json_str, final_str, strstr(final_str, "} ") - final_str + 1)) { // + 1 means include '}'
-			// validate key-value pairs string is valid json data
-			if (!validate_json_string(json_str)) {
-				ErrPrint(ptidStr, "INVALID_JSON {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
-						 context_ptr->component, msgid);
-				return kPmLogErr_InvalidFormat;
-			}
-		} else {
-			ErrPrint(ptidStr, "INVALID_JSON {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\"}",
-					 context_ptr->component, msgid);
+		strncpy(json_str, final_str, ptr_closing - final_str + 1); // + 1 means include '}'
+		// validate key-value pairs string is valid json data
+		if (!validate_json_string(json_str)) {
+			ErrPrint(ptidStr,
+                     "INVALID_JSON {\"CONTEXT\":\"%s\",\"MSGID\":\"%s\", \"CAUSE\":\"The json string is wrong.\"}",
+                     context_ptr->component, msgid);
 			return kPmLogErr_InvalidFormat;
 		}
 	}
