@@ -774,7 +774,7 @@ proto:	void PmLogDumpDataDebug(PmLogContext context,
 	by default traces are disabled (i.e. not compiled).
 **********************************************************************/
 
-#ifdef PMLOG_TRACES_ENABLED
+#if PMLOG_TRACES_ENABLED && !WEBOS_MASS_PRODUCTION
 
 	#ifndef PMLOG_TRACE_CONTEXT
 		#ifdef PMLOG_TRACE_COMPONENT
