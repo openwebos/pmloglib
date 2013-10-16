@@ -996,7 +996,7 @@ bool PmLogPrvReadConfigs(bool (*fn_ptr) (const char *file_name))
 	GDir *dir;
 	GError *error = NULL;
 	const char *file_name;
-	char *full_path;
+	gchar *full_path = NULL;
 	bool found_default_conf = false;
 
 	dir = g_dir_open(CONFIG_DIR, 0, &error);
@@ -1014,8 +1014,9 @@ bool PmLogPrvReadConfigs(bool (*fn_ptr) (const char *file_name))
 		fn_ptr(full_path);
 	}
 	g_free(full_path);
+	full_path = NULL;
 
-
+#ifndef WEBOS_MASS_PRODUCTION // It'll parse default.conf only.
 	while ((file_name = g_dir_read_name(dir))) {
 		// ignore hidden files or files without ".conf" suffix
 		if ('.' == file_name[0] ||
@@ -1036,7 +1037,8 @@ bool PmLogPrvReadConfigs(bool (*fn_ptr) (const char *file_name))
 		fn_ptr(full_path);
 
 		g_free(full_path);
-        }
+	}
+#endif
 
 	g_dir_close(dir);
 
