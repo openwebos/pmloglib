@@ -46,7 +46,7 @@
 // take advantage of glibc
 extern const char*	__progname;
 
-
+#define DEBUG_MSG_ID "DBGMSG"
 
 /***********************************************************************
  * gettid
@@ -254,9 +254,9 @@ void GetPidStr(PmLogContext_ *context,char *ptidStr,long int ptidStrLen)
 static PmLogErr validate_msgid(const char *msgid, PmLogContext_ *context_ptr)
 {
 #ifndef WEBOS_MASS_PRODUCTION
-	int		msgid_len;
-	const char	*ptr_index;
-	char            ptidStr[ PIDSTR_LEN ];
+	int         msgid_len = 0;
+	const char  *ptr_index = NULL;
+	char        ptidStr[ PIDSTR_LEN ];
 
 	GetPidStr(context_ptr, ptidStr, sizeof(ptidStr));
 
@@ -280,10 +280,15 @@ static PmLogErr validate_msgid(const char *msgid, PmLogContext_ *context_ptr)
 		if (strchr(" {}", *ptr_index) != NULL) {
 			ErrPrint(context_ptr->component,
 			         ptidStr,
-			         "INVALID_MSGID {\"MSGID\":\"%s\"} msgid contains space, { or }.",
+			         "INVALID_MSGID {\"MSGID\":\"%s\"} MSGID contains space, { or }.",
 			         msgid);
 			return kPmLogErr_InvalidMsgID;
 		}
+	}
+
+	if (msgid_len == 0) {
+		ErrPrint(context_ptr->component, ptidStr, "EMPTY_MSGID {} MSGID must not be empty");
+		return kPmLogErr_InvalidMsgID;
 	}
 #endif
 	return kPmLogErr_None;
@@ -2001,6 +2006,7 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
 	char            lineStr[BUFFER_LEN] = {0,};
 	int             ret;
 	char            ptidStr[PIDSTR_LEN];
+	char            *ptr_msgid = msgid;
 
 	contextP = PrvResolveContext(context);
 	if (!contextP) {
@@ -2012,13 +2018,13 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
 		return logErr;
 	}
 
+	GetPidStr(contextP, ptidStr, sizeof(ptidStr));
+
 	if (level != kPmLogLevel_Debug) {
 		logErr = validate_msgid(msgid, contextP);
 		if (logErr != kPmLogErr_None) {
 			return logErr;
 		}
-
-		GetPidStr(contextP, ptidStr, sizeof(ptidStr));
 
 		if (kvpairs) {
 			if (!validate_json_string(kvpairs)) {
@@ -2045,6 +2051,8 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
 			ErrPrint(contextP->component, ptidStr, "INVALID_FREESTRING {} ");
 			return kPmLogErr_InvalidFormat;
 		}
+
+		ptr_msgid = DEBUG_MSG_ID;
 	}
 
 	ret = snprintf(lineStr, sizeof(lineStr), "%s %s",
@@ -2060,7 +2068,7 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
 		}
 	}
 
-	return PrvLogWrite(contextP, level, msgid, lineStr);
+	return PrvLogWrite(contextP, level, ptr_msgid, lineStr);
 }
 
 /*********************************************************************/
@@ -2222,8 +2230,10 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 	va_list        args;
 	int            ret;
 	char           final_str[BUFFER_LEN] = {0, };
+	char           *ptr_final_str = final_str;
 	char           json_str[BUFFER_LEN] = {0, };
-	const int      empty_kv_pair_len = 3;
+	const char*    empty_kv_pair_str = "{} ";
+	char           *ptr_msgid = msgid;
 	char           ptidStr[ PIDSTR_LEN ];
 
 	context_ptr = PrvResolveContext(context);
@@ -2275,16 +2285,18 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 			         "kv_count should be 0 for DEBUG level");
 			return kPmLogErr_InvalidFormat;
 		}
+
+		ptr_msgid = DEBUG_MSG_ID;
 	}
 
 	if (kv_count == 0) {
-		// Add "{} " when kv_count comes 0.
-		snprintf(final_str, sizeof(final_str), "{} ");
+		// Add "{} " when kv_count comes 0 or level is debug
+		snprintf(ptr_final_str, sizeof(final_str), empty_kv_pair_str);
+		ptr_final_str += strlen(empty_kv_pair_str);
 	}
 
 	va_start(args, fmt);
-	ret = vsnprintf(kv_count != 0 ? final_str : final_str + empty_kv_pair_len,
-                    sizeof(final_str), fmt, args);
+	ret = vsnprintf(ptr_final_str, sizeof(final_str), fmt, args);
 	va_end(args);
 	if (ret < 0) {
 		ErrPrint(context_ptr->component, ptidStr, "VSNPRN_ERR {\"MSGID\":\"%s\",\"ERR_STR\":\"%s\"}",
@@ -2293,7 +2305,7 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 		return kPmLogErr_FormatStringFailed;
 	} else if (ret >= sizeof(final_str)) {
 		char buffer[128] = {0,};
-		snprintf(buffer, sizeof(buffer), kv_count != 0 ? final_str : final_str + empty_kv_pair_len);
+		snprintf(buffer, sizeof(buffer), ptr_final_str);
 		WarnPrint(context_ptr->component, ptidStr, "MSG_TRUNCATED {\"MSGID\":\"%s\",\"CAUSE\":\"Log message exceeded 1024 bytes\",\"TRUNCATED_MSG\":\"%s ...\"}",
 		          msgid ? msgid : "NULL", buffer);
 	}
@@ -2319,7 +2331,7 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 		}
 	}
 
-	return PrvLogWrite(context_ptr, level, msgid, final_str);
+	return PrvLogWrite(context_ptr, level, ptr_msgid, final_str);
 }
 
 /*********************************************************************/
