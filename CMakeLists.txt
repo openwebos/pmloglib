@@ -58,13 +58,27 @@ if(WEBOS_DISTRO_PRERELEASE STREQUAL "")
 else()
 	webos_add_compiler_flags(ALL -Wall)
 endif()
+
+if(PARSE_DEFAULT_ONLY)
+	pkg_check_modules(NYXLIB REQUIRED nyx)
+	include_directories(${NYXLIB_INCLUDE_DIRS})
+	webos_add_compiler_flags(ALL ${NYXLIB_CFLAGS_OTHER} -DPARSE_DEFAULT_ONLY)
+	add_definitions(-DUPLOAD_CONF_FILE="${WEBOS_INSTALL_LOCALSTATEDIR}/spool/rdxd/sdp")
+endif()
+
 webos_add_linker_options(ALL --version-script=${CMAKE_SOURCE_DIR}/src/PmLogLibExports.map)
 webos_add_linker_options(ALL --no-undefined)
 
 webos_configure_source_files(SOURCE_FILES src/PmLogLib.c)
 webos_configure_header_files(include/public INSTALL)
 add_library(PmLogLib SHARED ${SOURCE_FILES})
+
+if(PARSE_DEFAULT_ONLY)
+target_link_libraries(PmLogLib ${GLIB2_LDFLAGS} ${PBNJSON_C_LDFLAGS} ${NYXLIB_LDFLAGS} dl pthread)
+else()
 target_link_libraries(PmLogLib ${GLIB2_LDFLAGS} ${PBNJSON_C_LDFLAGS} dl pthread)
+endif()
+
 webos_build_library()
 
 # Default config file for pmloglib

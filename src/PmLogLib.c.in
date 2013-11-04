@@ -39,9 +39,13 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <glib.h>
+#include <glib/gstdio.h>
 #include <glib/gprintf.h>
 #include <pbnjson.h>
 
+#ifdef PARSE_DEFAULT_ONLY
+#include <nyx/nyx_client.h>
+#endif
 
 // take advantage of glibc
 extern const char*	__progname;
@@ -942,6 +946,51 @@ static bool parse_json_file(const char *file_name)
 	return true;
 }
 
+#ifdef PARSE_DEFAULT_ONLY
+bool CheckTestServerFlag (void)
+{
+	bool is_squashfs = false;
+	bool is_official = false;
+	errno = 0;
+
+	// is flash?
+	is_squashfs = (g_access("/etc", W_OK) == -1);
+
+	// is official?
+	nyx_device_handle_t device = NULL;
+	nyx_error_t nyx_error = NYX_ERROR_GENERIC;
+	const char *build_id = NULL;
+	int build_number = 0;
+
+	nyx_init();
+
+	nyx_error = nyx_device_open(NYX_DEVICE_OS_INFO, "Main", &device);
+
+	if (nyx_error != NYX_ERROR_NONE)
+	{
+		ErrPrint(COMPONENT_PREFIX, "[]", "NYX_DEVICE_OPEN_ERROR {\"ErrorCode\":\"%d\"}", nyx_error);
+	}
+	else
+	{
+		nyx_error = nyx_os_info_query(device, NYX_OS_INFO_WEBOS_BUILD_ID, &build_id);
+		if (nyx_error != NYX_ERROR_NONE)
+		{
+			ErrPrint(COMPONENT_PREFIX, "[]", "NYX_GET_BUILDID_ERROR {\"ErrorCode\":\"%d\"}", nyx_error);
+		}
+	}
+
+	nyx_deinit();
+
+	build_number = g_ascii_strtoull(build_id, NULL, 10);
+	is_official = (build_number > 0);
+
+	// is the flag file exists? && is flash? & is official?
+	return (g_file_test(UPLOAD_CONF_FILE, G_FILE_TEST_EXISTS) == false
+			&& is_squashfs
+			&& is_official);
+}
+#endif
+
 #define DEFAULT_CONFIG "default.conf"
 bool PmLogPrvReadConfigs(bool (*fn_ptr) (const char *file_name))
 {
@@ -950,6 +999,9 @@ bool PmLogPrvReadConfigs(bool (*fn_ptr) (const char *file_name))
 	const char *file_name;
 	gchar *full_path = NULL;
 	bool found_default_conf = false;
+#ifdef PARSE_DEFAULT_ONLY
+	bool upload_test_server = CheckTestServerFlag();
+#endif
 
 	dir = g_dir_open(CONFIG_DIR, 0, &error);
 	if (!dir) {
@@ -969,6 +1021,10 @@ bool PmLogPrvReadConfigs(bool (*fn_ptr) (const char *file_name))
 	full_path = NULL;
 
 #ifndef WEBOS_MASS_PRODUCTION // It'll parse default.conf only.
+#ifdef PARSE_DEFAULT_ONLY
+	if (!upload_test_server)
+	{
+#endif
 	while ((file_name = g_dir_read_name(dir))) {
 		// ignore hidden files or files without ".conf" suffix
 		if ('.' == file_name[0] ||
@@ -990,6 +1046,9 @@ bool PmLogPrvReadConfigs(bool (*fn_ptr) (const char *file_name))
 
 		g_free(full_path);
 	}
+#ifdef PARSE_DEFAULT_ONLY
+	}
+#endif
 #endif
 
 	g_dir_close(dir);
