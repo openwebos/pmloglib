@@ -152,6 +152,7 @@ typedef enum
 	kPmLogErr_ContextNotFound		= PMLOG_ERR(13),
 	kPmLogErr_BufferTooSmall		= PMLOG_ERR(14),
 	kPmLogErr_InvalidMsgID			= PMLOG_ERR(15),
+	kPmLogErr_EmptyMsgID			= PMLOG_ERR(16),
 	//------------------------------------------------
 	kPmLogErr_Unknown				= PMLOG_ERR(999)
 } PmLogErr;

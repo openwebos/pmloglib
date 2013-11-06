@@ -287,8 +287,7 @@ static PmLogErr validate_msgid(const char *msgid, PmLogContext_ *context_ptr)
 	}
 
 	if (msgid_len == 0) {
-		ErrPrint(context_ptr->component, ptidStr, "EMPTY_MSGID {} MSGID must not be empty");
-		return kPmLogErr_InvalidMsgID;
+		return kPmLogErr_EmptyMsgID;
 	}
 #endif
 	return kPmLogErr_None;
@@ -2022,7 +2021,7 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
 
 	if (level != kPmLogLevel_Debug) {
 		logErr = validate_msgid(msgid, contextP);
-		if (logErr != kPmLogErr_None) {
+		if (kPmLogErr_InvalidMsgID == logErr) {
 			return logErr;
 		}
 
@@ -2066,6 +2065,17 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
 		if (ret >= sizeof(lineStr)) {
 			DbgPrint("snprintf truncation\n");
 		}
+	}
+
+	if (kPmLogErr_EmptyMsgID == logErr) {
+		char buffer[128] = {0,};
+		snprintf(buffer, sizeof(buffer), lineStr);
+		gchar *escaped_str = g_strescape(buffer, "");
+		ErrPrint(contextP->component, ptidStr,
+		         "EMPTY_MSGID {\"MESSAGE\":\"%s ...\"} MSGID must not be empty",
+		         escaped_str);
+		g_free(escaped_str);
+		return kPmLogErr_InvalidFormat;
 	}
 
 	return PrvLogWrite(contextP, level, ptr_msgid, lineStr);
@@ -2251,7 +2261,7 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 	if (kPmLogLevel_Debug != level) {
 
 		err = validate_msgid(msgid, context_ptr);
-		if (err != kPmLogErr_None) {
+		if (kPmLogErr_InvalidMsgID == err) {
 			return err;
 		}
 
@@ -2308,6 +2318,17 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 		snprintf(buffer, sizeof(buffer), ptr_final_str);
 		WarnPrint(context_ptr->component, ptidStr, "MSG_TRUNCATED {\"MSGID\":\"%s\",\"CAUSE\":\"Log message exceeded 1024 bytes\",\"TRUNCATED_MSG\":\"%s ...\"}",
 		          msgid ? msgid : "NULL", buffer);
+	}
+
+	if (kPmLogErr_EmptyMsgID == err) {
+		char buffer[128] = {0,};
+		snprintf(buffer, sizeof(buffer), ptr_final_str);
+		gchar *escaped_str = g_strescape(buffer, "");
+		ErrPrint(context_ptr->component, ptidStr,
+		          "EMPTY_MSGID {\"MESSAGE\":\"%s ...\"} MSGID must not be empty",
+		          escaped_str);
+		g_free(escaped_str);
+		return kPmLogErr_InvalidFormat;
 	}
 
 	if (kPmLogLevel_Debug != level) {
