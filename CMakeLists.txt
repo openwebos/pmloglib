@@ -63,7 +63,7 @@ if(PARSE_DEFAULT_ONLY)
 	pkg_check_modules(NYXLIB REQUIRED nyx)
 	include_directories(${NYXLIB_INCLUDE_DIRS})
 	webos_add_compiler_flags(ALL ${NYXLIB_CFLAGS_OTHER} -DPARSE_DEFAULT_ONLY)
-	add_definitions(-DUPLOAD_CONF_FILE="${WEBOS_INSTALL_LOCALSTATEDIR}/spool/rdxd/sdp")
+	add_definitions(-DUPLOAD_CONF_FILE="${WEBOS_INSTALL_LOCALSTATEDIR}/spool/sdp")
 endif()
 
 webos_add_linker_options(ALL --version-script=${CMAKE_SOURCE_DIR}/src/PmLogLibExports.map)
