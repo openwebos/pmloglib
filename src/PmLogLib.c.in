@@ -947,14 +947,24 @@ static bool parse_json_file(const char *file_name)
 }
 
 #ifdef PARSE_DEFAULT_ONLY
-bool CheckTestServerFlag (void)
+bool is_flash_official_build (void)
 {
+	gchar *is_nfs = NULL;
 	bool is_squashfs = false;
 	bool is_official = false;
 	errno = 0;
 
+	gchar **env = g_get_environ();
+
+	is_nfs = g_environ_getenv(env, "IS_NFS");
+
 	// is flash?
-	is_squashfs = (g_access("/etc", W_OK) == -1);
+	if (is_nfs)
+	{
+		is_squashfs = (strncmp(is_nfs, "NO", strlen(is_nfs)) == 0);
+	}
+
+	g_strfreev(env);
 
 	// is official?
 	nyx_device_handle_t device = NULL;
@@ -985,9 +995,7 @@ bool CheckTestServerFlag (void)
 	is_official = (build_number > 0);
 
 	// is the flag file exists? && is flash? & is official?
-	return (g_file_test(UPLOAD_CONF_FILE, G_FILE_TEST_EXISTS) == false
-			&& is_squashfs
-			&& is_official);
+	return (is_squashfs && is_official);
 }
 #endif
 
@@ -999,9 +1007,6 @@ bool PmLogPrvReadConfigs(bool (*fn_ptr) (const char *file_name))
 	const char *file_name;
 	gchar *full_path = NULL;
 	bool found_default_conf = false;
-#ifdef PARSE_DEFAULT_ONLY
-	bool upload_test_server = CheckTestServerFlag();
-#endif
 
 	dir = g_dir_open(CONFIG_DIR, 0, &error);
 	if (!dir) {
@@ -1022,8 +1027,8 @@ bool PmLogPrvReadConfigs(bool (*fn_ptr) (const char *file_name))
 
 #ifndef WEBOS_MASS_PRODUCTION // It'll parse default.conf only.
 #ifdef PARSE_DEFAULT_ONLY
-	if (!upload_test_server)
-	{
+	if (!is_flash_official_build())
+	{ //Do not parse individual context conf files in an flash official build
 #endif
 	while ((file_name = g_dir_read_name(dir))) {
 		// ignore hidden files or files without ".conf" suffix

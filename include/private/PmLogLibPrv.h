@@ -143,6 +143,10 @@ PmLogErr PmLogPrvTest(const char* cmd, void* data);
 **********************************************************************/
 bool PmLogPrvReadConfigs(bool (*fn_ptr)(const char *file_name));
 
+#ifdef PARSE_DEFAULT_ONLY
+bool is_flash_official_build (void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
