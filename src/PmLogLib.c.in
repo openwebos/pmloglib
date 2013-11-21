@@ -2311,6 +2311,7 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 	const char*    empty_kv_pair_str = "{} ";
 	char           *ptr_msgid = msgid;
 	char           ptidStr[ PIDSTR_LEN ];
+	int            empty_kv_pair_size = 0;
 
 	context_ptr = PrvResolveContext(context);
 	if (!context_ptr) {
@@ -2367,12 +2368,13 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 
 	if (kv_count == 0) {
 		// Add "{} " when kv_count comes 0 or level is debug
-		snprintf(ptr_final_str, sizeof(final_str), empty_kv_pair_str);
-		ptr_final_str += strlen(empty_kv_pair_str);
+		snprintf(ptr_final_str, sizeof(final_str), "%s", empty_kv_pair_str);
+		empty_kv_pair_size = strlen(empty_kv_pair_str);
+		ptr_final_str += empty_kv_pair_size;
 	}
 
 	va_start(args, fmt);
-	ret = vsnprintf(ptr_final_str, sizeof(final_str), fmt, args);
+	ret = vsnprintf(ptr_final_str, sizeof(final_str) - empty_kv_pair_size, fmt, args);
 	va_end(args);
 	if (ret < 0) {
 		ErrPrint(context_ptr->component, ptidStr, "VSNPRN_ERR {\"MSGID\":\"%s\",\"ERR_STR\":\"%s\"}",
@@ -2381,14 +2383,15 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 		return kPmLogErr_FormatStringFailed;
 	} else if (ret >= sizeof(final_str)) {
 		char buffer[128] = {0,};
-		snprintf(buffer, sizeof(buffer), ptr_final_str);
+		snprintf(buffer, sizeof(buffer), "%s", ptr_final_str);
 		WarnPrint(context_ptr->component, ptidStr, "MSG_TRUNCATED {\"MSGID\":\"%s\",\"CAUSE\":\"Log message exceeded 1024 bytes\",\"TRUNCATED_MSG\":\"%s ...\"}",
 		          msgid ? msgid : "NULL", buffer);
 	}
 
+
 	if (kPmLogErr_EmptyMsgID == err) {
 		char buffer[128] = {0,};
-		snprintf(buffer, sizeof(buffer), ptr_final_str);
+		snprintf(buffer, sizeof(buffer), "%s", ptr_final_str);
 		gchar *escaped_str = g_strescape(buffer, "");
 		ErrPrint(context_ptr->component, ptidStr,
 		          "EMPTY_MSGID {\"MESSAGE\":\"%s ...\"} MSGID must not be empty",
@@ -2401,7 +2404,7 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 		char *ptr_closing = strstr(final_str, "} ");
 		if (!ptr_closing) {
 			char truncated[256] = {0,};
-			snprintf(truncated, sizeof(truncated), final_str);
+			snprintf(truncated, sizeof(truncated), "%s", final_str);
 			ErrPrint(context_ptr->component, ptidStr,
 			         "INVALID_JSON {\"MSGID\":\"%s\",\"CAUSE\":\"The json string was truncated\",\"TRUNCATED\":%s ...\"}}",
 			         msgid, truncated);
