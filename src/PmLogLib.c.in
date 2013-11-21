@@ -798,12 +798,14 @@ static void parse_config_flags(jvalue_ref j_context, const gchar *file_name, con
 	}
 
 	context_ptr = PrvResolveContext(context);
-	GetPidStr(context_ptr, ptidStr, sizeof(ptidStr));
+
 	if (!context_ptr) {
 		ErrPrint(COMPONENT_PREFIX, ptidStr, "FLG_RSVL_ERR {\"file\":\"%s\",\"context\":\"%s\"}",
 		         file_name, context_name);
 		return;
 	}
+
+	GetPidStr(context_ptr, ptidStr, sizeof(ptidStr));
 
 	ret = jobject_get_exists(j_context, j_cstr_to_buffer(LOG_PROCESS_IDS_TAG), &value);
 	if (ret) { //found logProcessIds
