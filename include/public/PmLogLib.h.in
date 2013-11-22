@@ -900,6 +900,21 @@ const char* PmLogGetErrDbgString(PmLogErr logErr);
 	literal_key, "\"%s\"", string_value
 
 /*********************************************************************/
+/* PMLOGJSON */
+/**
+@brief  This macro is used for building a JSON key value pair, where
+        value is a JSON object.
+
+	Ex: PMLOGJSON("KEY", JSON_OBJECT);
+	    PMLOGJSON("MYKEY","{\"KEY\":{\"SUB_KEY\":\"SUB_VALUE\"}\"}
+
+@param  literal_key string containing the key
+@param  json_value stringified JSON object
+**********************************************************************/
+#define PMLOGJSON(literal_key, json_value) \
+	literal_key, "%s", json_value
+
+/*********************************************************************/
 /* _PmLogMsgKV */
 /**
 @brief  Logs the specified key value pair(s) and formatted text,
