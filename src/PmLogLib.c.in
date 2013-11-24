@@ -51,6 +51,7 @@
 extern const char*	__progname;
 
 #define DEBUG_MSG_ID "DBGMSG"
+#define TRUNCATED_MSG_SIZE 128
 
 /***********************************************************************
  * gettid
@@ -2044,14 +2045,58 @@ Exit:
 	return kPmLogErr_None;
 }
 
-static bool validate_json_string(const char* kvpairs)
+static bool validate_json_string(const char* kvpairs, PmLogErr *logErr, const bool with_tailing)
 {
 #ifndef WEBOS_MASS_PRODUCTION
 	JSchemaInfo  schemaInfo;
 
-	jschema_info_init(&schemaInfo, jschema_all(), NULL, NULL);
+	char *ptr_kvpairs = kvpairs;
+	char json_str[BUFFER_LEN] = {0, };
+	int next_brace_pos = 0;
+	int previous_pos = 0;
+	char *search_str = NULL;
+	int move_index = 0;
 
-	return jsax_parse(NULL, j_cstr_to_buffer(kvpairs), &schemaInfo);
+	if (with_tailing) {
+		search_str = "} ";
+		move_index = 2;
+	}
+	else {
+		search_str = "}";
+		move_index = 1;
+	}
+
+	// split json string and freetext until parsing is successful
+	while (ptr_kvpairs != NULL)
+	{
+		ptr_kvpairs = strstr(ptr_kvpairs, search_str);
+		if (!ptr_kvpairs)
+		{
+			return false;
+		}
+
+		next_brace_pos = ptr_kvpairs - kvpairs + move_index; // index after closing curly braces
+
+		// To prevent buffer overflowing
+		if (next_brace_pos > sizeof(json_str) - 1)
+		{
+			*logErr = kPmLogErr_TooMuchData;
+			return false;
+		}
+
+		// copy memory for spaces
+		memcpy(json_str + previous_pos, kvpairs + previous_pos, next_brace_pos - previous_pos);
+
+		jschema_info_init(&schemaInfo, jschema_all(), NULL, NULL);
+		if(jsax_parse(NULL, j_cstr_to_buffer(json_str), &schemaInfo))
+		{
+			return true;
+		}
+
+		// move 2 pointers to find next "} "
+		ptr_kvpairs += move_index;
+	}
+	return false;
 #else
 	return true;
 #endif
@@ -2092,9 +2137,28 @@ PmLogErr PmLogString_(PmLogContext context, PmLogLevel level,
 		}
 
 		if (kvpairs) {
-			if (!validate_json_string(kvpairs)) {
-				ErrPrint(contextP->component, ptidStr, "INVALID_JSON {\"MSGID\":\"%s\"}",
-				         msgid);
+			if (!validate_json_string(kvpairs, &logErr, false)) {
+				char truncated[TRUNCATED_MSG_SIZE] = {0,};
+				gchar *escaped_str = NULL;
+				char *err_str = NULL;
+
+				snprintf(truncated, sizeof(truncated), "%s", kvpairs);
+				escaped_str = g_strescape(truncated, NULL);
+
+				if (logErr == kPmLogErr_TooMuchData)
+				{
+					err_str = "The json string exceeded 1024 bytes.";
+				}
+				else
+				{
+					err_str = "The json string is wrong.";
+				}
+
+				ErrPrint(contextP->component, ptidStr,
+				         "INVALID_JSON {\"MSGID\":\"%s\", \"CAUSE\":\"%s\",\"JSON\":\"%s ...\"}",
+				         msgid, err_str, escaped_str);
+
+				g_free(escaped_str);
 				return kPmLogErr_InvalidFormat;
 			}
 		}
@@ -2307,7 +2371,6 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 	int            ret;
 	char           final_str[BUFFER_LEN] = {0, };
 	char           *ptr_final_str = final_str;
-	char           json_str[BUFFER_LEN] = {0, };
 	const char*    empty_kv_pair_str = "{} ";
 	char           *ptr_msgid = msgid;
 	char           ptidStr[ PIDSTR_LEN ];
@@ -2382,42 +2445,54 @@ PmLogErr _PmLogMsgKV(PmLogContext context, PmLogLevel level, unsigned int flags,
 		         strerror(errno));
 		return kPmLogErr_FormatStringFailed;
 	} else if (ret >= sizeof(final_str)) {
-		char buffer[128] = {0,};
+		char buffer[TRUNCATED_MSG_SIZE] = {0,};
+		gchar *escaped_str = NULL;
 		snprintf(buffer, sizeof(buffer), "%s", ptr_final_str);
+		escaped_str = g_strescape(buffer, NULL);
 		WarnPrint(context_ptr->component, ptidStr, "MSG_TRUNCATED {\"MSGID\":\"%s\",\"CAUSE\":\"Log message exceeded 1024 bytes\",\"TRUNCATED_MSG\":\"%s ...\"}",
-		          msgid ? msgid : "NULL", buffer);
+		          msgid ? msgid : "NULL", escaped_str);
+		g_free(escaped_str);
 	}
 
 
 	if (kPmLogErr_EmptyMsgID == err) {
-		char buffer[128] = {0,};
+		char buffer[TRUNCATED_MSG_SIZE] = {0,};
 		snprintf(buffer, sizeof(buffer), "%s", ptr_final_str);
 		gchar *escaped_str = g_strescape(buffer, "");
 		ErrPrint(context_ptr->component, ptidStr,
-		          "EMPTY_MSGID {\"MESSAGE\":\"%s ...\"} MSGID must not be empty",
-		          escaped_str);
+		         "EMPTY_MSGID {\"MESSAGE\":\"%s ...\"} MSGID must not be empty",
+		         escaped_str);
 		g_free(escaped_str);
 		return kPmLogErr_InvalidFormat;
 	}
 
 	if (kPmLogLevel_Debug != level) {
-		char *ptr_closing = strstr(final_str, "} ");
-		if (!ptr_closing) {
-			char truncated[256] = {0,};
-			snprintf(truncated, sizeof(truncated), "%s", final_str);
-			ErrPrint(context_ptr->component, ptidStr,
-			         "INVALID_JSON {\"MSGID\":\"%s\",\"CAUSE\":\"The json string was truncated\",\"TRUNCATED\":%s ...\"}}",
-			         msgid, truncated);
-			return kPmLogErr_InvalidFormat;
-		}
-		// split json string and freetext
-		strncpy(json_str, final_str, ptr_closing - final_str + 1); // + 1 means include '}'
 		// validate key-value pairs string is valid json data
-		if (!validate_json_string(json_str)) {
-			ErrPrint(context_ptr->component, ptidStr,
-			         "INVALID_JSON {\"MSGID\":\"%s\", \"CAUSE\":\"The json string is wrong.\"}",
-			         msgid);
-			return kPmLogErr_InvalidFormat;
+		if (kv_count != 0) {
+			if (!validate_json_string(final_str, &err, true)) {
+				char truncated[TRUNCATED_MSG_SIZE] = {0,};
+				gchar *escaped_str = NULL;
+				char *err_str = NULL;
+
+				snprintf(truncated, sizeof(truncated), "%s", final_str);
+				escaped_str = g_strescape(truncated, NULL);
+
+				if (err == kPmLogErr_TooMuchData)
+				{
+					err_str = "The json string exceeded 1024 bytes.";
+				}
+				else
+				{
+					err_str = "The json string is wrong.";
+				}
+
+				ErrPrint(context_ptr->component, ptidStr,
+				         "INVALID_JSON {\"MSGID\":\"%s\", \"CAUSE\":\"%s\",\"JSON\":\"%s ...\"}",
+				         msgid, err_str, escaped_str);
+
+				g_free(escaped_str);
+				return kPmLogErr_InvalidFormat;
+			}
 		}
 	}
 
