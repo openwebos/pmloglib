@@ -1206,7 +1206,7 @@ static void __attribute ((constructor)) init_function(void)
 		mystrcpy(gGlobalContextP->component,
 			sizeof(gGlobalContextP->component), kPmLogGlobalContextName);
 
-		gGlobalContextP->info.enabledLevel = kPmLogLevel_Debug;
+		gGlobalContextP->info.enabledLevel = kPmLogLevel_Info;
 		gGlobalContextP->info.flags = 0;
 
 		needInit = true;
