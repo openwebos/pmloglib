@@ -1,6 +1,6 @@
 // @@@LICENSE
 //
-// Copyright (c) 2007-2013 LG Electronics, Inc.
+// Copyright (c) 2007-2014 LG Electronics, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -876,6 +876,18 @@ static bool parse_json_file(const char *file_name)
 		return false;
 	}
 
+        if(g_str_has_suffix(file_name, "default.conf")) {
+                if (jobject_get_exists(parsed, j_cstr_to_buffer("contextLogging"), &value)) {
+                        bool flag;
+                        if (CONV_OK == jboolean_get(value, &flag)) {
+                                gGlobalsP->contextLogging = flag;
+                        }
+                        else {
+                                ErrPrint(COMPONENT_PREFIX, "[]", "INV_CTXFLAG {\"file\":\"%s\"}", file_name);
+                        }
+                }
+        }
+
 	ret = jobject_get_exists(parsed, j_cstr_to_buffer("contexts"), &contexts_array);
 	if (ret) { // found contexts array
 		for (index = 0; index < jarray_size(contexts_array); index++) {
@@ -1028,35 +1040,31 @@ bool PmLogPrvReadConfigs(bool (*fn_ptr) (const char *file_name))
 	g_free(full_path);
 	full_path = NULL;
 
-#ifndef WEBOS_MASS_PRODUCTION // It'll parse default.conf only.
-#ifdef PARSE_DEFAULT_ONLY
-	if (!is_flash_official_build())
-	{ //Do not parse individual context conf files in an flash official build
-#endif
-	while ((file_name = g_dir_read_name(dir))) {
-		// ignore hidden files or files without ".conf" suffix
-		if ('.' == file_name[0] ||
-		    !g_str_has_suffix (file_name, ".conf")) {
-			continue;
+#ifndef WEBOS_MASS_PRODUCTION // Parse only default.conf in production
+        if (gGlobalsP->contextLogging)  // Do not parse individual context conf files if context logging is disabled in development builds
+        {
+		while ((file_name = g_dir_read_name(dir))) {
+			// ignore hidden files or files without ".conf" suffix
+			if ('.' == file_name[0] ||
+			    !g_str_has_suffix (file_name, ".conf")) {
+				continue;
+			}
+
+			if (!g_strcmp0(file_name, DEFAULT_CONFIG)) {
+				// we parsed this file already
+				continue;
+			}
+
+			// Construct full path for parsing selected conf file
+			// Ex: /etc/pmlog.d/default.conf = /etc/pmlog.d + default.conf
+			full_path = g_build_filename(CONFIG_DIR, file_name, NULL);
+
+			// execute caller supplied function
+			fn_ptr(full_path);
+
+			g_free(full_path);
 		}
-
-		if (!g_strcmp0(file_name, DEFAULT_CONFIG)) {
-			// we parsed this file already
-			continue;
-		}
-
-		// Construct full path for parsing selected conf file
-		// Ex: /etc/pmlog.d/default.conf = /etc/pmlog.d + default.conf
-		full_path = g_build_filename(CONFIG_DIR, file_name, NULL);
-
-		// execute caller supplied function
-		fn_ptr(full_path);
-
-		g_free(full_path);
 	}
-#ifdef PARSE_DEFAULT_ONLY
-	}
-#endif
 #endif
 
 	g_dir_close(dir);
@@ -1185,12 +1193,10 @@ static void __attribute ((constructor)) init_function(void)
 		DbgPrint("initializing shared mem\n");
 
 		gGlobalsP->signature = PMLOG_SIGNATURE;
-
 		gGlobalsP->maxUserContexts = sizeof(gGlobalsP->userContexts) /
 			sizeof(PmLogContext_);
-
 		gGlobalsP->numUserContexts = 0;
-
+		gGlobalsP->contextLogging = false;
 /*
  * Temporarily suppress the deprecation warnings for this block, as we
  * are the deprecators
@@ -1205,7 +1211,6 @@ static void __attribute ((constructor)) init_function(void)
 
 		mystrcpy(gGlobalContextP->component,
 			sizeof(gGlobalContextP->component), kPmLogGlobalContextName);
-
 		gGlobalContextP->info.enabledLevel = kPmLogLevel_Info;
 		gGlobalContextP->info.flags = 0;
 

@@ -36,5 +36,7 @@
 			"maxSize" : 2000,
 			"rotations" : 5
 		}
-	]
+        ],
+
+        "contextLogging" : false
 }
