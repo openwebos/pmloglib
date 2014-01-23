@@ -1,6 +1,6 @@
 # @@@LICENSE
 #
-# Copyright (c) 2007-2013 LG Electronics, Inc.
+# Copyright (c) 2007-2014 LG Electronics, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ endif()
 
 include(webOS/webOS)
 webos_modules_init(1 0 0 QUALIFIER RC4)
-webos_component(3 0 1)
+webos_component(3 0 2)
 
 # Build the private interface to PmLogLib (PmLogLib-private)
 # To enable this option run "cmake -D BUILD_PRIVATE=ON"
@@ -52,6 +52,12 @@ webos_add_compiler_flags(ALL ${PBNJSON_C_CFLAGS_OTHER})
 
 webos_build_pkgconfig(files/pkgconfig/PmLogLib)
 include_directories(include/public include/private)
+
+if(ENABLE_LOGGING)
+	set(PMLOG_ENABLE_LOGGING 1)
+else()
+	set(PMLOG_ENABLE_LOGGING 0)
+endif()
 
 if(WEBOS_DISTRO_PRERELEASE STREQUAL "")
 	webos_add_compiler_flags(ALL -Wall -DWEBOS_MASS_PRODUCTION)

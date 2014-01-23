@@ -1,6 +1,6 @@
 // @@@LICENSE
 //
-// Copyright (c) 2007-2013 LG Electronics, Inc.
+// Copyright (c) 2007-2014 LG Electronics, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,6 +82,8 @@
 #ifndef PMLOGLIB_H
 #define PMLOGLIB_H
 
+#undef PMLOGLIB_ENABLE_LOGGING
+#define PMLOGLIB_ENABLE_LOGGING @PMLOG_ENABLE_LOGGING@
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -153,6 +155,7 @@ typedef enum
 	kPmLogErr_BufferTooSmall		= PMLOG_ERR(14),
 	kPmLogErr_InvalidMsgID			= PMLOG_ERR(15),
 	kPmLogErr_EmptyMsgID			= PMLOG_ERR(16),
+	kPmLogErr_LoggingDisabled		= PMLOG_ERR(17),
 	//------------------------------------------------
 	kPmLogErr_Unknown				= PMLOG_ERR(999)
 } PmLogErr;
@@ -421,11 +424,14 @@ proto:	bool PmLogIsEnabled(PmLogContext context, PmLogLevel level);
                         kPmLogErr_InvalidFormat
                         kPmLogErr_InvalidMsgID
 **********************************************************************/
+#if PMLOGLIB_ENABLE_LOGGING
 #define PmLogString(context, level, msgid, kvpairs, message) \
         (PmLogIsEnabled(context, level) \
                 ? PmLogString_(context, level, msgid, kvpairs, message) \
                 : kPmLogErr_LevelDisabled)
-
+#else
+#define PmLogString(context, level, msgid, kvpairs, message) kPmLogErr_LoggingDisabled
+#endif
 
 /*********************************************************************/
 /* PmLogString_ */
@@ -483,10 +489,14 @@ proto:	PmLogErr PmLogPrint(PmLogContext context, PmLogLevel level,
 			kPmLogErr_InvalidFormat
 			kPmLogErr_LevelDisabled
 **********************************************************************/
-#define	PmLogPrint(context, level, ...)	\
+#if PMLOGLIB_ENABLE_LOGGING
+#define PmLogPrint(context, level, ...) \
 	(PmLogIsEnabled(context, level) \
 		? PmLogPrint_(context, level, __VA_ARGS__) \
 		: kPmLogErr_LevelDisabled)
+#else
+#define PmLogPrint(context, level, ...) kPmLogErr_LoggingDisabled
+#endif
 
 
 /*********************************************************************/
@@ -579,11 +589,14 @@ proto:	PmLogErr PmLogVPrint(PmLogContext context, PmLogLevel level,
 			kPmLogErr_InvalidFormat
 			kPmLogErr_LevelDisabled
 **********************************************************************/
-#define	PmLogVPrint(context, level, fmt, args)	\
+#if PMLOGLIB_ENABLE_LOGGING
+#define PmLogVPrint(context, level, fmt, args) \
 	(PmLogIsEnabled(context, level) \
 		? PmLogVPrint_(context, level, fmt, args) \
 		: kPmLogErr_LevelDisabled)
-
+#else
+#define PmLogVPrint(context, level, fmt, args) kPmLogErr_LoggingDisabled
+#endif
 
 /*********************************************************************/
 /* PmLogVPrintError */
@@ -699,10 +712,14 @@ proto:	PmLogErr PmLogDumpData(PmLogContext context, PmLogLevel level,
 			kPmLogErr_NoData
 			kPmLogErr_InvalidData
 **********************************************************************/
-#define	PmLogDumpData(context, level, data, numBytes, format)	\
+#if PMLOGLIB_ENABLE_LOGGING
+#define PmLogDumpData(context, level, data, numBytes, format) \
 	(PmLogIsEnabled(context, level) \
 		? PmLogDumpData_(context, level, data, numBytes, format) \
 		: kPmLogErr_LevelDisabled)
+#else
+#define PmLogDumpData(context, level, data, numBytes, format) kPmLogErr_LoggingDisabled
+#endif
 
 
 /*********************************************************************/
@@ -954,10 +971,14 @@ proto:	void PmLogMsg(PmLogContext context, PmLogLevel level,
 
 @return ::PmLogErr
 **********************************************************************/
-#define PmLogMsg(context, level_suffix, msgid, kv_count, ...)	\
+#if PMLOGLIB_ENABLE_LOGGING
+#define PmLogMsg(context, level_suffix, msgid, kv_count, ...) \
 	(PmLogIsEnabled(context, kPmLogLevel_##level_suffix) \
 		? _PmLogMsgKV##kv_count(context, level_suffix, msgid, __VA_ARGS__) \
 		: kPmLogErr_LevelDisabled)
+#else
+#define PmLogMsg(context, level_suffix, msgid, kv_count, ...) kPmLogErr_LoggingDisabled
+#endif
 
 /*********************************************************************/
 /* PmLogCritical */
