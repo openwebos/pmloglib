@@ -20,6 +20,17 @@
 			"rules" : [
 				{"filter" : "*.*", "output" : "legacy-log"}
 			]
+                },
+                {
+                        "name" : "devmode",
+                        "level" : "debug",
+                        "logProcessIds" : false,
+                        "logThreadIds" : false,
+                        "logToConsole" : false,
+                        "rules" : [
+                                {"filter" : "*.*", "output" : "devlog"}
+                        ]
+
 		}
 	],
 
@@ -35,6 +46,13 @@
 			"file" : "@WEBOS_INSTALL_LOGDIR@/legacy-log",
 			"maxSize" : 2000,
 			"rotations" : 5
+                },
+                {
+                        "name" : "devlog",
+                        "file" : "@WEBOS_INSTALL_MEDIADIR@/developer/log/devlog",
+                        "maxSize" : 2000,
+                        "rotations" : 5
+
 		}
         ],
 
