@@ -382,6 +382,41 @@ PmLogErr PmLogGetContextLevel(PmLogContext context, PmLogLevel* levelP);
 PmLogErr PmLogSetContextLevel(PmLogContext context, PmLogLevel level);
 
 
+/*********************************************************************/
+/* PmLogGetLibContext */
+/**
+@brief	Returns the context of the process loading the library.
+	May be used by shared libraries instead of PmLogGetContext call.
+	That is, libraries do not setup their own context, but make this
+	call to invoke the context of the calling process.
+	This makes it easier for processes to control the logging level
+	of library messages and direct them to specified file as needed.
+
+	Note: Libraries using this functionality are required to identify
+	it's messages with a pre-defined prefix. For Example: LS2 messages
+	can have the message ids prefixed with 'LS'. This is to identify
+	the library from which the messages came, since the context will
+	no more have the library name in them. The context will be context
+	name of the calling process.
+
+@return Context of the process loading the library. If the loading process
+	has setup a library context with PmLogSetLibContext, this context
+	is returned. Otherwise, return is the first context with which the
+	process is registered to pmloglib. If the process is not registered
+	with any context, then the fallback return is the default context.
+**********************************************************************/
+PmLogContext PmLogGetLibContext();
+
+
+/*********************************************************************/
+/* PmLogSetLibContext */
+/**
+@brief  Sets up context for a process where all library messages can
+	be directed.
+**********************************************************************/
+void PmLogSetLibContext(PmLogContext libContext);
+
+
 //#####################################################################
 
 

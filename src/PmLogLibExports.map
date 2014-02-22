@@ -40,6 +40,8 @@ global:
 	PmLogGetErrDbgString;
 	PmLogString_;
 	_PmLogMsgKV;
+	PmLogGetLibContext;
+	PmLogSetLibContext;
 
 	### Private interface (PmLogLibPrv.h) ###
 	PmLogPrvGlobals;

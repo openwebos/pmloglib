@@ -49,6 +49,7 @@
 
 // take advantage of glibc
 extern const char*	__progname;
+static PmLogContext libProcessContext = kPmLogGlobalContext;
 
 #define DEBUG_MSG_ID "DBGMSG"
 #define TRUNCATED_MSG_SIZE 128
@@ -1734,6 +1735,11 @@ PmLogErr PmLogGetContext(const char* contextName, PmLogContext* pContext)
 	if (theContextP != NULL)
 	{
 		*pContext = PrvExportContext(theContextP);
+
+		if (libProcessContext == kPmLogGlobalContext)
+		{                                                             //if libProcessContext is not set using PmlogSetLibContext
+	                libProcessContext = *pContext;
+		}
 		return kPmLogErr_None;
 	}
 
@@ -1742,6 +1748,15 @@ PmLogErr PmLogGetContext(const char* contextName, PmLogContext* pContext)
 	return logErr;
 }
 
+void PmLogSetLibContext(PmLogContext libContext)
+{
+	libProcessContext = libContext;
+}
+
+PmLogContext PmLogGetLibContext()
+{
+	return libProcessContext;
+}
 
 /*********************************************************************/
 /* PmLogGetContextInline */
@@ -2009,15 +2024,8 @@ static PmLogErr PrvLogWrite(PmLogContext_ *contextP, PmLogLevel level,
 
 	GetPidStr(contextP, ptidStr, sizeof(ptidStr));
 
-	if (PrvIsGlobalContext(contextP))
-	{
-		componentStr[0] = 0;
-	}
-	else
-	{
-		mysprintf(componentStr, sizeof(componentStr), "%s",
-			contextP->component);
-	}
+	mysprintf(componentStr, sizeof(componentStr), "%s",
+		contextP->component);
 
 	syslog(level, "%s %s %s %s %s", ptidStr, PMLOG_IDENTIFIER, componentStr, msgid ? msgid : "", s);
 
