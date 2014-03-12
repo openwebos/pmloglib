@@ -32,12 +32,31 @@ include(webOS/webOS)
 webos_modules_init(1 0 0 QUALIFIER RC4)
 webos_component(3 1 0)
 
+if(ENABLE_LOGGING)
+	set(PMLOG_ENABLE_LOGGING 1)
+else()
+	set(PMLOG_ENABLE_LOGGING 0)
+endif()
+
 # Build the private interface to PmLogLib (PmLogLib-private)
 # To enable this option run "cmake -D BUILD_PRIVATE=ON"
 if(BUILD_PRIVATE)
 	webos_build_pkgconfig(files/pkgconfig/PmLogLib-private)
 	install(DIRECTORY "include/private/" DESTINATION @WEBOS_INSTALL_INCLUDEDIR@ FILES_MATCHING PATTERN "*.h" PATTERN ".*" EXCLUDE)
 	return()
+endif()
+
+# Install headers separately from the library. To enable this
+# option, use "cmake -D SHIP_HEADERS_ONLY=ON". To avoid
+# installing them again, use "cmake -D BUILD_WITHOUT_HEADERS=ON"
+# in following builds.
+if(NOT BUILD_WITHOUT_HEADERS)
+	webos_build_pkgconfig(files/pkgconfig/PmLogLib-headers)
+	webos_configure_header_files(include/public INSTALL)
+	install(DIRECTORY "include/public/" DESTINATION @WEBOS_INSTALL_INCLUDEDIR@ FILES_MATCHING PATTERN "*.h" PATTERN ".*" EXCLUDE)
+	if(SHIP_HEADERS_ONLY)
+		return()
+	endif()
 endif()
 
 include(FindPkgConfig)
@@ -52,12 +71,6 @@ webos_add_compiler_flags(ALL ${PBNJSON_C_CFLAGS_OTHER})
 
 webos_build_pkgconfig(files/pkgconfig/PmLogLib)
 include_directories(include/public include/private)
-
-if(ENABLE_LOGGING)
-	set(PMLOG_ENABLE_LOGGING 1)
-else()
-	set(PMLOG_ENABLE_LOGGING 0)
-endif()
 
 if(WEBOS_DISTRO_PRERELEASE STREQUAL "")
 	webos_add_compiler_flags(ALL -Wall -DWEBOS_MASS_PRODUCTION)
@@ -75,7 +88,6 @@ webos_add_linker_options(ALL --version-script=${CMAKE_SOURCE_DIR}/src/PmLogLibEx
 webos_add_linker_options(ALL --no-undefined)
 
 webos_configure_source_files(SOURCE_FILES src/PmLogLib.c)
-webos_configure_header_files(include/public INSTALL)
 add_library(PmLogLib SHARED ${SOURCE_FILES})
 
 if(PARSE_DEFAULT_ONLY)
@@ -84,7 +96,7 @@ else()
 	target_link_libraries(PmLogLib ${GLIB2_LDFLAGS} ${PBNJSON_C_LDFLAGS} dl pthread)
 endif()
 
-webos_build_library()
+webos_build_library(NOHEADERS)
 
 # Default config file for pmloglib
 # Each component should provide its own config file
