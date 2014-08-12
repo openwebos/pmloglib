@@ -16,7 +16,7 @@ Below are the tools (and their minimum versions) required to build _PmLogLib_:
 - glib-2.0 2.32.4
 - openwebos/libpbnjson 1.3.0
 - make (any version)
-- openwebos/cmake-modules-webos 1.0.0 RC3
+- openwebos/cmake-modules-webos 1.0.0 RC6
 - pkg-config 0.26
 
 Below is the component (and its minimum version) required to run _PmLogLib_:
@@ -100,7 +100,7 @@ You will need to use `sudo` if you did not specify `WEBOS_INSTALL_ROOT`.
 Unless otherwise specified, all content, including all source code files and
 documentation files in this repository are:
 
-Copyright (c) 2007-2013 LG Electronics, Inc.
+Copyright (c) 2007-2014 LG Electronics, Inc.
 
 Unless otherwise specified or set forth in the NOTICE file, all content,
 including all source code files and documentation files in this repository are:

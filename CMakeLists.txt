@@ -29,8 +29,9 @@ else()
 endif()
 
 include(webOS/webOS)
-webos_modules_init(1 0 0 QUALIFIER RC4)
+webos_modules_init(1 0 0 QUALIFIER RC6)
 webos_component(3 1 0)
+webos_include_install_paths()
 
 if(ENABLE_LOGGING)
 	set(PMLOG_ENABLE_LOGGING 1)
@@ -87,8 +88,7 @@ endif()
 webos_add_linker_options(ALL --version-script=${CMAKE_SOURCE_DIR}/src/PmLogLibExports.map)
 webos_add_linker_options(ALL --no-undefined)
 
-webos_configure_source_files(SOURCE_FILES src/PmLogLib.c)
-add_library(PmLogLib SHARED ${SOURCE_FILES})
+add_library(PmLogLib SHARED src/PmLogLib.c)
 
 if(PARSE_DEFAULT_ONLY)
 	target_link_libraries(PmLogLib ${GLIB2_LDFLAGS} ${PBNJSON_C_LDFLAGS} ${NYXLIB_LDFLAGS} dl pthread)

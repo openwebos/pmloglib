@@ -77,7 +77,7 @@ pid_t gettid(void)
 #define LOG_LEVEL_TAG       "level"
 
 #define BUFFER_LEN 1024
-#define CONFIG_DIR "@WEBOS_INSTALL_SYSCONFDIR@/pmlog.d"
+#define CONFIG_DIR WEBOS_INSTALL_SYSCONFDIR "/pmlog.d"
 #define MSGID_LEN 32
 #define PIDSTR_LEN 32
 
@@ -189,7 +189,7 @@ static void PrintAppendToFile(const char* filePath, const char* fmt, ...)
 #undef DbgPrint
 #define DbgPrint(...) \
 	{															\
-		const char* path = "@WEBOS_INSTALL_LOGDIR@/pmlog.log";				\
+		const char* path = WEBOS_INSTALL_LOGDIR "/pmlog.log";				\
 		PrintAppendToFile(path, COMPONENT_PREFIX __VA_ARGS__);	\
 	}
 
@@ -1092,7 +1092,7 @@ static const char kHexChars[16] =
 **********************************************************************/
 static void __attribute ((constructor)) init_function(void)
 {
-	const char* kPmLogLibSoFilePath = "@WEBOS_INSTALL_LIBDIR@/libPmLogLib.so";
+	const char* kPmLogLibSoFilePath = WEBOS_INSTALL_LIBDIR "/libPmLogLib.so";
 
 	sem_t*      sem;
 	key_t       key;
@@ -2789,5 +2789,3 @@ PmLogErr PmLogPrvTest(const char* cmd, void* data)
 
 	return kPmLogErr_InvalidParameter;
 }
-
-
