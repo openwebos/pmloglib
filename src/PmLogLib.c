@@ -77,7 +77,8 @@ pid_t gettid(void)
 #define LOG_LEVEL_TAG       "level"
 
 #define BUFFER_LEN 1024
-#define CONFIG_DIR "@WEBOS_INSTALL_SYSCONFDIR@/pmlog.d"
+#define CONFIG_DIR WEBOS_INSTALL_SYSCONFDIR "/pmlog.d"
+#define OVERRIDES_CONF WEBOS_INSTALL_PREFERENCESDIR "/pmloglib/overrides.conf"
 #define MSGID_LEN 32
 #define PIDSTR_LEN 32
 
@@ -189,7 +190,7 @@ static void PrintAppendToFile(const char* filePath, const char* fmt, ...)
 #undef DbgPrint
 #define DbgPrint(...) \
 	{															\
-		const char* path = "@WEBOS_INSTALL_LOGDIR@/pmlog.log";				\
+		const char* path = WEBOS_INSTALL_LOGDIR "/pmlog.log";				\
 		PrintAppendToFile(path, COMPONENT_PREFIX __VA_ARGS__);	\
 	}
 
@@ -859,10 +860,85 @@ static void parse_config_flags(jvalue_ref j_context, const gchar *file_name, con
 	}
 }
 
+static bool parse_config_overrides(jvalue_ref j_overrides, const gchar *file_name)
+{
+	for (ssize_t i = 0; i < jarray_size(j_overrides); i++) {
+		jvalue_ref j_override = jarray_get(j_overrides, i);
+		if (!jis_object(j_override)) {
+			ErrPrint(COMPONENT_PREFIX, "[]", "PARSE_ERROR {\"file\":\"%s\",\"index\":%zd} Invalid override (ignoring)",
+			         file_name, i);
+			continue;
+		}
+
+		jvalue_ref j_value;
+		raw_buffer name;
+		raw_buffer level_str;
+		int	       level;
+		bool       valid_level = false;
+		if (jobject_get_exists(j_override, J_CSTR_TO_BUF("name"), &j_value)) {
+			name = jstring_get(j_value);
+		} else { // global overrides
+			name = j_str_to_buffer(NULL, 0);
+		}
+
+		if (jobject_get_exists(j_override, j_cstr_to_buffer(LOG_LEVEL_TAG), &j_value)) {
+			level_str = jstring_get(j_value);
+			valid_level = PrvParseConfigLevel(level_str.m_str, &level);
+			if (!valid_level) {
+				ErrPrint(COMPONENT_PREFIX, "[]", "PARSE_ERROR {\"file\":\"%s\",\"index\":%zu} Invalid log level \"%s\" (ignoring)",
+				         file_name, i, level_str.m_str);
+			}
+		} else { // global overrides
+			level_str = j_str_to_buffer(NULL, 0);
+		}
+
+		if (valid_level) {
+			PmLogErr log_err;
+			const char *context_name;
+			if (name.m_str == NULL) {
+				int contexts_count;
+				context_name = "<all>";
+				log_err = PmLogGetNumContexts(&contexts_count);
+				if (log_err == kPmLogErr_None) {
+					PmLogContext context;
+					for (int n = 0; n < contexts_count; ++n) {
+						log_err = PmLogGetIndContext(n, &context);
+						if (log_err != kPmLogErr_None) break;
+
+						log_err = PmLogSetContextLevel(context, level);
+
+						if (log_err != kPmLogErr_None) {
+							// remember at which context we've met an error
+							context_name = PrvResolveContext(context)->component;
+							break;
+						}
+					}
+				}
+			} else {
+				PmLogContext context;
+				context_name = name.m_str;
+				log_err = PmLogGetContext(context_name, &context);
+				if (log_err == kPmLogErr_None) {
+					log_err = PmLogSetContextLevel(context, level);
+				}
+			}
+			if (log_err != kPmLogErr_None) {
+				ErrPrint(COMPONENT_PREFIX, "[]", "SET_CTX_LEVEL_FAIL {\"file\":\"%s\", \"index\":%d} Failed to set log level for %s: %s",
+				         file_name, i, context_name, PmLogGetErrDbgString(log_err));
+			}
+		}
+
+		jstring_free_buffer(name);
+		jstring_free_buffer(level_str);
+	}
+	return true;
+}
+
 static bool parse_json_file(const char *file_name)
 {
 	int         index;
 	bool        found_context = false;
+	bool        have_valid_overrides = false;
 	JSchemaInfo schemainfo;
 	jvalue_ref  parsed;
 	jvalue_ref  contexts_array;
@@ -952,9 +1028,15 @@ static bool parse_json_file(const char *file_name)
 		} // for loop for traversing CONTEXTS array
 	} // if we found a CONTEXTS array
 
+	jvalue_ref overrides;
+	ret = jobject_get_exists(parsed, j_cstr_to_buffer("overrides"), &overrides);
+	if (ret && parse_config_overrides(overrides, file_name)) {
+		have_valid_overrides = true;
+	}
+
 	j_release(&parsed);
 
-	if (!found_context) {
+	if (!found_context && !have_valid_overrides) {
 		ErrPrint(COMPONENT_PREFIX, "[]", "CTX_MISSING {\"file\":\"%s\"}", file_name);
 		return false;
 	}
@@ -1070,6 +1152,14 @@ bool PmLogPrvReadConfigs(bool (*fn_ptr) (const char *file_name))
 
 	g_dir_close(dir);
 
+	// Last phase - overrides.
+	// It should be always last as long as override for all components walks
+	// through already-defined-contexts.
+	if (g_file_test(OVERRIDES_CONF, G_FILE_TEST_IS_REGULAR)) {
+		// execute caller supplied function
+		fn_ptr(OVERRIDES_CONF);
+	}
+
 	return found_default_conf;
 }
 
@@ -1092,7 +1182,7 @@ static const char kHexChars[16] =
 **********************************************************************/
 static void __attribute ((constructor)) init_function(void)
 {
-	const char* kPmLogLibSoFilePath = "@WEBOS_INSTALL_LIBDIR@/libPmLogLib.so";
+	const char* kPmLogLibSoFilePath = WEBOS_INSTALL_LIBDIR "/libPmLogLib.so";
 
 	sem_t*      sem;
 	key_t       key;
@@ -2789,5 +2879,3 @@ PmLogErr PmLogPrvTest(const char* cmd, void* data)
 
 	return kPmLogErr_InvalidParameter;
 }
-
-
