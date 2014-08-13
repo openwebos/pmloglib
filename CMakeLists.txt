@@ -73,6 +73,7 @@ webos_add_compiler_flags(ALL ${PBNJSON_C_CFLAGS_OTHER})
 webos_build_pkgconfig(files/pkgconfig/PmLogLib)
 include_directories(include/public include/private)
 
+webos_add_compiler_flags(ALL --std=c99)
 if(WEBOS_DISTRO_PRERELEASE STREQUAL "")
 	webos_add_compiler_flags(ALL -Wall -DWEBOS_MASS_PRODUCTION)
 else()
