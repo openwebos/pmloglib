@@ -30,7 +30,7 @@ endif()
 
 include(webOS/webOS)
 webos_modules_init(1 0 0 QUALIFIER RC6)
-webos_component(3 1 0)
+webos_component(3 2 0)
 webos_include_install_paths()
 
 if(ENABLE_LOGGING)
