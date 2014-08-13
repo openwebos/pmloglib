@@ -33,6 +33,8 @@ webos_modules_init(1 0 0 QUALIFIER RC6)
 webos_component(3 2 0)
 webos_include_install_paths()
 
+set(ENABLE_LOGGING TRUE CACHE BOOL "Enable logging")
+
 if(ENABLE_LOGGING)
 	set(PMLOG_ENABLE_LOGGING 1)
 else()
