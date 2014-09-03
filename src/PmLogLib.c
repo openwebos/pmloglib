@@ -82,6 +82,18 @@ pid_t gettid(void)
 #define MSGID_LEN 32
 #define PIDSTR_LEN 32
 
+void block_signals(sigset_t *old_set)
+{
+	sigset_t new_set;
+	sigfillset(&new_set);
+	pthread_sigmask(SIG_SETMASK, &new_set, old_set);
+}
+
+void unblock_signals(sigset_t *old_set)
+{
+	pthread_sigmask(SIG_SETMASK, old_set, NULL);
+}
+
 void CallSysLog(const char *context, const int level, const char* pidtid, const char* fmt, ...)
 {
 	char buffer[1024] = {0,};
@@ -91,7 +103,11 @@ void CallSysLog(const char *context, const int level, const char* pidtid, const 
 	va_start (args, fmt);
 	g_vsnprintf (buffer + index, sizeof(buffer), fmt, args);
 	va_end (args);
+
+	sigset_t old_set;
+	block_signals(&old_set);
 	syslog(level, "%s", buffer);
+	unblock_signals(&old_set);
 }
 
 #ifdef DEBUG_ENABLED
@@ -2117,7 +2133,10 @@ static PmLogErr PrvLogWrite(PmLogContext_ *contextP, PmLogLevel level,
 	mysprintf(componentStr, sizeof(componentStr), "%s",
 		contextP->component);
 
+	sigset_t old_set;
+	block_signals(&old_set);
 	syslog(level, "%s %s %s %s %s", ptidStr, PMLOG_IDENTIFIER, componentStr, msgid ? msgid : "", s);
+	unblock_signals(&old_set);
 
 	if (contextP->info.flags & kPmLogFlag_LogToConsole)
 	{
