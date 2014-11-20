@@ -405,7 +405,7 @@ PmLogErr PmLogSetContextLevel(PmLogContext context, PmLogLevel level);
 	process is registered to pmloglib. If the process is not registered
 	with any context, then the fallback return is the default context.
 **********************************************************************/
-PmLogContext PmLogGetLibContext();
+PmLogContext PmLogGetLibContext(void);
 
 
 /*********************************************************************/
